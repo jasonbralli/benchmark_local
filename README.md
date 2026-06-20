@@ -6,30 +6,38 @@ Este projeto testa modelos GGUF locais, um por vez, mede desempenho e registra s
 
 ```text
 .
-├─ README/
-│  ├─ README.md
-│  └─ prompts.example.json
-├─ index.html
 ├─ models/          # modelos locais, ignorados pelo Git
 ├─ reports/         # resultados locais, ignorados pelo Git
 ├─ scripts/
 │  ├─ benchmark_models.py
 │  └─ run-server.ps1
+├─ README.md
+├─ prompts.example.json
+├─ index.html
+├─ LICENSE
+├─ setup.ps1
 ├─ run-benchmark-auto.ps1
 ├─ .gitignore
 └─ .git
+
 ```
 
 ## Como usar
 
 1. Coloque os modelos `.gguf` em `models/`.
-2. Rode o benchmark:
+
+2. Rode o setup.ps1
+
+```powershell
+.\setup.ps1
+```
+3. Rode o benchmark:
 
 ```powershell
 .\run-benchmark-auto.ps1
 ```
 
-3. Abra o painel:
+4. Abra o painel:
 
 ```text
 ./index.html
@@ -104,9 +112,3 @@ A organização atual já está pronta para versionamento:
 - `README/` para documentação e exemplos
 - `models/` para seus modelos locais
 - `reports/` para saídas geradas, normalmente ignoradas pelo Git
-
-Antes de subir, vale conferir:
-
-- se os modelos em `models/` devem ser versionados ou não
-- se você quer manter os `reports/` fora do repositório
-- se o caminho do `llama-server.exe` precisa ser parametrizado por máquina
