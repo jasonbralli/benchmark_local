@@ -44,7 +44,7 @@ foreach ($dir in $dirs) {
 
 $checks = @(
     'scripts/benchmark_models.py',
-    'readme/README.md',
+    'README.md',
     'index.html',
     '.gitignore',
     'run-benchmark-auto.ps1'
