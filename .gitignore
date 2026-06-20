@@ -1,0 +1,19 @@
+# Ignora diretórios e arquivos gerados automaticamente
+
+# Python cache e bytecode
+__pycache__/
+*.pyc
+
+# Arquivos de log
+*.log
+
+# Modelos GGUF (grandes e específicos da máquina)
+models/*
+!models/.gitkeep
+
+# Relatórios e logs do servidor (gerados pelo benchmark)
+reports/*
+!reports/.gitkeep
+!reports/server-logs/
+reports/server-logs/*
+!reports/server-logs/.gitkeep
