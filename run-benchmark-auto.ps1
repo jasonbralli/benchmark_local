@@ -82,10 +82,9 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "✓ Benchmark concluído com sucesso!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Iniciando dashboard em http://localhost:8000 ..." -ForegroundColor Cyan
-    Start-Process python -ArgumentList "-m","http.server","8000","--directory",$ROOT -WindowStyle Hidden
-    Start-Sleep -Seconds 1
-    Start-Process "http://localhost:8000/"
+    Write-Host "Abrindo dashboard..." -ForegroundColor Cyan
+    $dashboard = Join-Path $ROOT "index.html"
+    Start-Process $dashboard
 } else {
     Write-Host ""
     Write-Host "❌ Benchmark falhou com código $LASTEXITCODE" -ForegroundColor Red
