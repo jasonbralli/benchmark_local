@@ -119,6 +119,7 @@
     <p class="footer" id="status">Nenhum arquivo carregado ainda.</p>
   </div>
 
+  <script src="reports/dashboard_data.js"></script>
   <script>
     const state = { data: null, sortKey: "avg_tokens_per_second", sortDir: "desc", simpleSortKey: "media", simpleSortDir: "desc" };
     const el = (id) => document.getElementById(id);
@@ -318,6 +319,11 @@
     }
     async function loadDefault() {
       try {
+        if (window.__DASHBOARD_DATA__) {
+          el("status").textContent = `Carregado: ${(window.__DASHBOARD_DATA__.models ?? []).length} modelos.`;
+          render(JSON.stringify(window.__DASHBOARD_DATA__));
+          return;
+        }
         const text = await requestText("reports/benchmark_results.dashboard.json");
         const data = JSON.parse(text);
         el("status").textContent = `Carregado: ${(data.models ?? []).length} modelos.`;
