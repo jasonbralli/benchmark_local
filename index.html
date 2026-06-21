@@ -318,71 +318,13 @@
     }
     async function loadDefault() {
       try {
-        const base = resolveReportsPath();
-        const [jsonText, summaryText, scoringText] = await Promise.all([
-          requestText(`${base}benchmark_results.dashboard.json`),
-          requestText(`${base}benchmark_results.summary.csv`),
-          requestText(`${base}scoring_summary.csv`),
-        ]);
-        let data = JSON.parse(jsonText);
-        const summaryRows = parseCsv(summaryText);
-        const scoringRows = parseCsv(scoringText);
-        applyEnrichments(data, summaryRows, scoringRows);
+        const text = await requestText("reports/benchmark_results.dashboard.json");
+        const data = JSON.parse(text);
         el("status").textContent = `Carregado: ${(data.models ?? []).length} modelos.`;
         render(JSON.stringify(data));
       } catch (err) {
-        el("status").textContent = `Falha ao carregar: ${err.message || err}`;
+        el("status").textContent = `Falha: ${err.message || err}`;
       }
-    }
-    function parseCsv(text) {
-      const lines = text.split(/\n/).filter((l) => l.trim());
-      if (lines.length < 2) return [];
-      const headers = lines[0].split(",").map((h) => h.trim());
-      return lines.slice(1).map((line) => {
-        const values = line.split(",");
-        const row = {};
-        headers.forEach((h, i) => {
-          const raw = values[i]?.trim() ?? "";
-          const number = Number(raw);
-          row[h] = raw === "" || !Number.isFinite(number) ? raw : number;
-        });
-        return row;
-      });
-    }
-    function applyEnrichments(data, summaryRows, scoringRows) {
-      const byModel = {};
-      for (const m of data.models ?? []) byModel[m.model] = m;
-      if (summaryRows) {
-        for (const row of summaryRows) {
-          const model = byModel[row.model];
-          if (!model) continue;
-          model.categories = model.categories ?? {};
-          model.categories.coding = { avg_tokens_per_second: Number(row.avg_tokens_per_second_coding ?? 0) };
-          model.categories.extraction = { avg_tokens_per_second: Number(row.avg_tokens_per_second_extraction ?? 0) };
-          model.categories.instruction = { avg_tokens_per_second: Number(row.avg_tokens_per_second_instruction ?? 0) };
-          model.categories.reasoning = { avg_tokens_per_second: Number(row.avg_tokens_per_second_reasoning ?? 0) };
-          model.min_tokens_per_second = Number(row.min_tokens_per_second ?? 0);
-          model.max_tokens_per_second = Number(row.max_tokens_per_second ?? 0);
-          model.avg_elapsed_seconds = Number(row.avg_elapsed_seconds ?? 0);
-          model.avg_tokens_generated = Number(row.avg_tokens_generated ?? 0);
-        }
-      }
-      if (scoringRows) {
-        for (const row of scoringRows) {
-          const model = byModel[row.model];
-          if (!model) continue;
-          model.final_score = Number(row.final_score ?? 0);
-          model.variance = Number(row.variance ?? 0);
-          model.success_rate = Number(row.success_rate ?? 0);
-          model.scores = {
-            coding: Number(row.coding ?? 0),
-            extraction: Number(row.extraction ?? 0),
-            instruction: Number(row.instruction ?? 0),
-            reasoning: Number(row.reasoning ?? 0),
-          };
-        }
-      }
-      return data;
     }
     el("reloadData").addEventListener("click", loadDefault);
     window.addEventListener("DOMContentLoaded", async () => {

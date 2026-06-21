@@ -583,7 +583,7 @@ def write_ranking_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
             )
 
 
-def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult]) -> None:
+def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_summaries: list[dict] | None = None) -> None:
     rows = list(rows)
     grouped: dict[str, list[BenchmarkResult]] = {}
     for row in rows:
@@ -602,44 +602,55 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult]) -> None:
             "avg_tokens_per_second": round(sum(row.tokens_per_second for row in category_rows) / total, 4) if total else 0.0,
         }
 
+    scoring_by_model = {s["model"]: s for s in (scoring_summaries or [])}
     models = []
     for model, model_rows in grouped.items():
         sample = model_rows[0]
         prompts_tested = len(model_rows)
         successful = sum(1 for row in model_rows if row.return_code == 0)
         avg_tps = sum(row.tokens_per_second for row in model_rows) / prompts_tested if prompts_tested else 0.0
-        models.append(
-            {
-                "model": model,
-                "model_path": sample.model_path,
-                "model_size_bytes": sample.model_size_bytes,
-                "model_size_gib": round(sample.model_size_bytes / (1024 ** 3), 4),
-                "context_size": sample.context_size,
-                "server_ctx_train": sample.server_ctx_train,
-                "observed_state_size_bytes": sample.observed_state_size_bytes,
-                "observed_state_size_gib": round(sample.observed_state_size_bytes / (1024 ** 3), 4),
-                "estimated_kv_cache_bytes": sample.estimated_kv_cache_bytes,
-                "estimated_kv_cache_gib": round(sample.estimated_kv_cache_bytes / (1024 ** 3), 4),
-                "estimated_loaded_bytes": sample.estimated_loaded_bytes,
-                "estimated_loaded_gib": round(sample.estimated_loaded_bytes / (1024 ** 3), 4),
-                "avg_tokens_per_second": round(avg_tps, 4),
-                "prompts_tested": prompts_tested,
-                "successful_prompts": successful,
-                "categories": {
-                    category: {
-                        "prompts_tested": len([row for row in model_rows if row.category == category]),
-                        "successful_prompts": sum(1 for row in model_rows if row.category == category and row.return_code == 0),
-                        "avg_elapsed_seconds": round(sum(row.elapsed_seconds for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 4)
-                        if len([row for row in model_rows if row.category == category]) else 0.0,
-                        "avg_tokens_generated": round(sum(row.tokens_generated for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 2)
-                        if len([row for row in model_rows if row.category == category]) else 0.0,
-                        "avg_tokens_per_second": round(sum(row.tokens_per_second for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 4)
-                        if len([row for row in model_rows if row.category == category]) else 0.0,
-                    }
-                    for category in categories
-                },
+        entry = {
+            "model": model,
+            "model_path": sample.model_path,
+            "model_size_bytes": sample.model_size_bytes,
+            "model_size_gib": round(sample.model_size_bytes / (1024 ** 3), 4),
+            "context_size": sample.context_size,
+            "server_ctx_train": sample.server_ctx_train,
+            "observed_state_size_bytes": sample.observed_state_size_bytes,
+            "observed_state_size_gib": round(sample.observed_state_size_bytes / (1024 ** 3), 4),
+            "estimated_kv_cache_bytes": sample.estimated_kv_cache_bytes,
+            "estimated_kv_cache_gib": round(sample.estimated_kv_cache_bytes / (1024 ** 3), 4),
+            "estimated_loaded_bytes": sample.estimated_loaded_bytes,
+            "estimated_loaded_gib": round(sample.estimated_loaded_bytes / (1024 ** 3), 4),
+            "avg_tokens_per_second": round(avg_tps, 4),
+            "prompts_tested": prompts_tested,
+            "successful_prompts": successful,
+            "categories": {
+                category: {
+                    "prompts_tested": len([row for row in model_rows if row.category == category]),
+                    "successful_prompts": sum(1 for row in model_rows if row.category == category and row.return_code == 0),
+                    "avg_elapsed_seconds": round(sum(row.elapsed_seconds for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 4)
+                    if len([row for row in model_rows if row.category == category]) else 0.0,
+                    "avg_tokens_generated": round(sum(row.tokens_generated for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 2)
+                    if len([row for row in model_rows if row.category == category]) else 0.0,
+                    "avg_tokens_per_second": round(sum(row.tokens_per_second for row in model_rows if row.category == category) / len([row for row in model_rows if row.category == category]), 4)
+                    if len([row for row in model_rows if row.category == category]) else 0.0,
+                }
+                for category in categories
+            },
+        }
+        if model in scoring_by_model:
+            s = scoring_by_model[model]
+            entry["final_score"] = s.get("final_score", 0.0)
+            entry["variance"] = s.get("variance", 0.0)
+            entry["success_rate"] = s.get("success_rate", 0.0)
+            entry["scores"] = {
+                "coding": s.get("coding", 0.0),
+                "extraction": s.get("extraction", 0.0),
+                "instruction": s.get("instruction", 0.0),
+                "reasoning": s.get("reasoning", 0.0),
             }
-        )
+        models.append(entry)
 
     payload = {
         "models": sorted(models, key=lambda item: item["avg_tokens_per_second"], reverse=True),
@@ -962,7 +973,7 @@ def main() -> int:
     dashboard_output = args.output.with_name(f"{args.output.stem}.dashboard.json")
     write_summary_csv(summary_output, results)
     write_ranking_csv(ranking_output, results)
-    write_dashboard_json(dashboard_output, results)
+    write_dashboard_json(dashboard_output, results, scoring_summaries or None)
     print(f"\nResultados salvos em: {args.output.resolve()}")
     print(f"Resumo salvo em: {summary_output.resolve()}")
     print(f"Ranking salvo em: {ranking_output.resolve()}")
