@@ -13,30 +13,16 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from benchmark_scorer import BenchmarkEvaluator, print_results
 from pathlib import Path
 from typing import Iterable, TextIO
 
-
-DEFAULT_PROMPTS = [
-    {
-        "id": "reasoning_1",
-        "prompt": "Explique em 3 passos como você resolveria este problema: tenho 12 maçãs e dou 5 para alguém. Quantas sobram?",
-    },
-    {
-        "id": "instruction_1",
-        "prompt": "Resuma em uma frase o que é memória RAM.",
-    },
-    {
-        "id": "coding_1",
-        "prompt": "Escreva uma função Python que receba uma lista de números e retorne a média deles.",
-    },
-    {
-        "id": "extraction_1",
-        "prompt": "Extraia os nomes próprios desta frase: 'Maria encontrou João no centro da cidade ontem'.",
-    },
-]
-
+DEFAULT_PROMPTS_PATH = Path(__file__).resolve().parent / "prompts.json"
+try:
+    DEFAULT_PROMPTS = json.loads(DEFAULT_PROMPTS_PATH.read_text(encoding="utf-8"))
+except (FileNotFoundError, json.JSONDecodeError):
+    DEFAULT_PROMPTS = []
 
 @dataclass
 class BenchmarkResult:
@@ -66,7 +52,7 @@ class ServerProcess:
     log_path: Path
 
 
-def load_prompts(path: Path | None) -> list[dict[str, str]]:
+def load_prompts(path: Path | None) -> list[dict]:
     if path is None:
         return DEFAULT_PROMPTS
 
@@ -74,14 +60,19 @@ def load_prompts(path: Path | None) -> list[dict[str, str]]:
     if not isinstance(data, list):
         raise ValueError("O arquivo de prompts precisa conter uma lista JSON.")
 
-    prompts: list[dict[str, str]] = []
+    prompts: list[dict] = []
     for item in data:
         if not isinstance(item, dict) or "prompt" not in item:
             raise ValueError("Cada item de prompt precisa ser um objeto com a chave 'prompt'.")
+        prompt_id = str(item.get("id") or f"prompt_{len(prompts) + 1}")
         prompts.append(
             {
-                "id": str(item.get("id") or f"prompt_{len(prompts) + 1}"),
+                "id": prompt_id,
                 "prompt": str(item["prompt"]),
+                "category": str(item.get("category") or prompt_category(prompt_id)),
+                "constraints": item.get("constraints"),
+                "expected_answer": item.get("expected_answer"),
+                "expected_elements": item.get("expected_elements"),
             }
         )
     return prompts
@@ -91,6 +82,24 @@ def prompt_category(prompt_id: str) -> str:
     if "_" in prompt_id:
         return prompt_id.split("_", 1)[0]
     return "misc"
+
+
+def clean_response(text: str) -> str:
+    if not text:
+        return text
+    # Remove reasoning blocks like </think>
+    cleaned = re.sub(r'', '', text, flags=re.DOTALL)
+    # Try to extract the last markdown code block if present
+    code_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)```', cleaned)
+    if code_blocks:
+        cleaned = '\n'.join(code_blocks)
+    # Strip excessive blank lines and whitespace
+    lines = [line.rstrip() for line in cleaned.splitlines()]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return '\n'.join(lines)
 
 
 def format_gib(size_bytes: int) -> str:
@@ -116,18 +125,20 @@ def _quote_windows(value: str) -> str:
 
 
 def build_command(template: str, model: Path, prompt: str) -> str:
-    return template.format(model=_quote_windows(str(model)), prompt=_quote_windows(prompt))
+    model_arg = subprocess.list2cmdline([str(model)])
+    prompt_arg = subprocess.list2cmdline([prompt])
+    return template.format(model=model_arg, prompt=prompt_arg)
 
 
 def run_prompt(command: str, timeout: int | None) -> tuple[int, str, str, float]:
     start = time.perf_counter()
     try:
         completed = subprocess.run(
-            shlex.split(command, posix=False),
+            [command],
             capture_output=True,
             text=True,
             timeout=timeout,
-            shell=False,
+            shell=True,
         )
         elapsed = time.perf_counter() - start
         return completed.returncode, completed.stdout.strip(), completed.stderr.strip(), elapsed
@@ -801,6 +812,9 @@ def main() -> int:
     args = parser.parse_args()
 
     prompts = load_prompts(args.prompts)
+    prompts_map = {p["id"]: p for p in prompts}
+    evaluator = BenchmarkEvaluator()
+    scoring_summaries: list[dict] = []
     models = expand_model_paths(args.models, args.recursive)
 
     if not models:
@@ -816,6 +830,7 @@ def main() -> int:
 
         print(f"\n==> Testando {model.name}")
         server_proc: ServerProcess | None = None
+        model_rows: list[BenchmarkResult] = []
         try:
             server_url = args.server_url
             if args.server_exe:
@@ -885,16 +900,17 @@ def main() -> int:
                         estimated_kv_cache_bytes=estimated_context_bytes,
                         estimated_loaded_bytes=estimated_loaded_bytes,
                         prompt_id=prompt["id"],
-                        category=prompt_category(prompt["id"]),
+                        category=prompt.get("category", prompt_category(prompt["id"])),
                         elapsed_seconds=elapsed,
                         tokens_generated=tokens_generated,
                         tokens_per_second=tokens_per_second,
                         return_code=return_code,
-                        response_body=response_body,
-                        output=stdout,
+                        response_body=clean_response(response_body),
+                        output=clean_response(stdout),
                         error=stderr,
                     )
                 )
+                model_rows.append(results[-1])
                 status = "ok" if return_code == 0 else f"erro {return_code}"
                 print(f"  {status} em {elapsed:.2f}s | tokens: {tokens_generated} | tok/s: {tokens_per_second:.2f}")
                 if stderr:
@@ -902,6 +918,39 @@ def main() -> int:
                 if stdout:
                     preview = stdout.replace("\r", " ").replace("\n", " ")
                     print(f"  saida: {preview[:300]}")
+
+            if model_rows:
+                responses = {row.prompt_id: row.response_body for row in model_rows}
+                evaluated = evaluator.evaluate_model(model.name, responses, prompts_map)
+                print_results(evaluated)
+                scoring_payload = {
+                    "model": model.name,
+                    "final_score": evaluated.final_score,
+                    "variance": evaluated.variance,
+                    "scores_by_category": evaluated.scores_by_category,
+                    "detailed_results": [asdict(r) for r in evaluated.detailed_results],
+                }
+                scoring_path = args.output.with_name(f"scoring_{model.name}.json")
+                scoring_path.write_text(
+                    json.dumps(scoring_payload, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                print(f"  Scoring salvo em: {scoring_path}")
+                scoring_summaries.append(
+                    {
+                        "model": model.name,
+                        "final_score": evaluated.final_score,
+                        "variance": evaluated.variance,
+                        **evaluated.scores_by_category,
+                        "total_prompts": len(model_rows),
+                        "successful_prompts": sum(1 for r in model_rows if r.return_code == 0),
+                        "success_rate": (
+                            sum(1 for r in model_rows if r.return_code == 0) / len(model_rows)
+                            if model_rows
+                            else 0.0
+                        ),
+                    }
+                )
         finally:
             if server_proc is not None:
                 stop_process(server_proc)
@@ -918,6 +967,16 @@ def main() -> int:
     print(f"Resumo salvo em: {summary_output.resolve()}")
     print(f"Ranking salvo em: {ranking_output.resolve()}")
     print(f"Dashboard salvo em: {dashboard_output.resolve()}")
+
+    if scoring_summaries:
+        scoring_summaries.sort(key=lambda item: item["final_score"], reverse=True)
+        scoring_csv = args.output.with_name("scoring_summary.csv")
+        with scoring_csv.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(scoring_summaries[0].keys()))
+            writer.writeheader()
+            writer.writerows(scoring_summaries)
+        print(f"Scoring summary salvo em: {scoring_csv.resolve()}")
+
     return 0
 
 

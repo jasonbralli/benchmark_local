@@ -1,0 +1,187 @@
+[
+  {
+    "id": "coding_1",
+    "category": "coding",
+    "prompt": "Escreva uma função em Python usando a biblioteca numpy que receba um array de preços e calcule a média móvel de 7 dias. Retorne o novo array.",
+    "expected_elements": ["import numpy", "def ", "np."],
+    "expected_answer": null,
+    "constraints": null
+  },
+  {
+    "id": "coding_2",
+    "category": "coding",
+    "prompt": "Crie um script Python que leia um arquivo de log local chamado 'server.log', encontre todas as linhas que contêm 'ERROR 500' e salve essas linhas em um novo arquivo chamado 'erros.txt'. Inclua tratamento de erro caso o arquivo não exista.",
+    "expected_elements": ["open(", "with ", "ERROR 500", "try", "except"],
+    "expected_answer": null,
+    "constraints": null
+  },
+  {
+    "id": "coding_3",
+    "category": "coding",
+    "prompt": "Escreva uma função em Python que receba uma string bagunçada com números de telefone e retorne apenas os números válidos no formato brasileiro (XX) XXXXX-XXXX. Use regex se possível.",
+    "expected_elements": ["regex", "re.", "def ", "("],
+    "expected_answer": null,
+    "constraints": null
+  },
+  {
+    "id": "coding_4",
+    "category": "coding",
+    "prompt": "Implemente o algoritmo clássico para encontrar a maior substring sem caracteres repetidos dentro de uma string fornecida. Explique a abordagem (sliding window é recomendada).",
+    "expected_elements": ["def ", "for", "set", "window"],
+    "expected_answer": null,
+    "constraints": null
+  },
+  {
+    "id": "coding_5",
+    "category": "coding",
+    "prompt": "Crie uma função em Python que acesse uma API pública fictícia via requisição GET, verifique se o status code é 200 e retorne os dados convertidos de JSON para um dicionário. Trate exceções de conexão.",
+    "expected_elements": ["import requests", "requests.get", "json", "try", "except", "status_code"],
+    "expected_answer": null,
+    "constraints": null
+  },
+  {
+    "id": "extraction_1",
+    "category": "extraction",
+    "prompt": "Extraia a placa de vídeo, o processador e a quantidade de memória RAM do seguinte texto: 'Ontem terminei de montar meu PC com um Ryzen 7 5700X, coloquei uma fonte de 600W, adicionei 32GB de memória DDR4 e finalmente espetei a RTX 5060 Ti 16GB. Ficou excelente.' Retorne como JSON com as chaves 'gpu', 'cpu' e 'ram'.",
+    "expected_elements": ["RTX 5060 Ti", "Ryzen 7 5700X", "32GB"],
+    "expected_answer": "{\"gpu\": \"RTX 5060 Ti 16GB\", \"cpu\": \"Ryzen 7 5700X\", \"ram\": \"32GB\"}",
+    "constraints": [
+      {"type": "format", "format": "json"}
+    ]
+  },
+  {
+    "id": "extraction_2",
+    "category": "extraction",
+    "prompt": "Leia o texto abaixo e extraia todas as datas e os eventos correspondentes. Formate a saída estritamente como um objeto JSON válido com a chave 'eventos' contendo um array de objetos com 'data' e 'evento': 'A empresa foi fundada em 12 de março de 2010. O primeiro produto foi lançado em 05 de abril de 2012. A expansão internacional ocorreu em 20 de novembro de 2015.'",
+    "expected_elements": ["2010", "2012", "2015", "eventos"],
+    "expected_answer": "{\"eventos\": [{\"data\": \"12/03/2010\", \"evento\": \"Fundação\"}, {\"data\": \"05/04/2012\", \"evento\": \"Lançamento do primeiro produto\"}, {\"data\": \"20/11/2015\", \"evento\": \"Expansão internacional\"}]}",
+    "constraints": [
+      {"type": "format", "format": "json"}
+    ]
+  },
+  {
+    "id": "extraction_3",
+    "category": "extraction",
+    "prompt": "A partir deste e-mail de suporte técnico, identifique e extraia: problema principal, código de erro e sistema operacional do usuário. Retorne como JSON com as chaves 'problema', 'codigo_erro' e 'so': 'Olá, meu computador com Windows 11 não está abrindo o painel de controle. Ele pisca a tela e mostra a mensagem de erro 0x80070005. Podem me ajudar?'",
+    "expected_elements": ["0x80070005", "Windows 11", "painel"],
+    "expected_answer": "{\"problema\": \"Painel de controle não abre\", \"codigo_erro\": \"0x80070005\", \"so\": \"Windows 11\"}",
+    "constraints": [
+      {"type": "format", "format": "json"}
+    ]
+  },
+  {
+    "id": "extraction_4",
+    "category": "extraction",
+    "prompt": "Extraia o nome do cliente, o valor total da compra e o número do pedido desta nota fiscal desestruturada: 'NFe emitente: Loja XPTO. Cliente: Carlos Silva. Itens: 2x teclado mecânico (R$ 150 cada), 1x mouse (R$ 80). Pedido #44590. Total pago: R$ 380,00.' Retorne como JSON com 'cliente', 'total' e 'pedido'.",
+    "expected_elements": ["Carlos Silva", "44590", "380"],
+    "expected_answer": "{\"cliente\": \"Carlos Silva\", \"total\": \"R$ 380,00\", \"pedido\": \"44590\"}",
+    "constraints": [
+      {"type": "format", "format": "json"}
+    ]
+  },
+  {
+    "id": "extraction_5",
+    "category": "extraction",
+    "prompt": "Analise o texto e extraia apenas os argumentos CONTRÁRIOS à adoção de IA na empresa mencionados pelo diretor. Retorne como JSON com uma chave 'argumentos' contendo um array de strings: 'A diretoria debateu o uso de IA. João apoiou, dizendo que aumenta a produtividade. O diretor Marcos foi contra, citando os altos custos de implementação e o risco de vazamento de dados dos clientes. Maria sugeriu um projeto piloto.'",
+    "expected_elements": ["custos", "vazamento"],
+    "expected_answer": "{\"argumentos\": [\"Altos custos de implementação\", \"Risco de vazamento de dados dos clientes\"]}",
+    "constraints": [
+      {"type": "format", "format": "json"}
+    ]
+  },
+  {
+    "id": "instruction_1",
+    "category": "instruction",
+    "prompt": "Explique o que é a 'temperatura' de um modelo de linguagem. Você DEVE usar exatamente 3 tópicos (bullet points), e cada tópico deve ter no máximo 15 palavras. Não adicione introdução ou conclusão.",
+    "expected_elements": ["•", "controla", "aleatoriedade"],
+    "expected_answer": null,
+    "constraints": [
+      {"type": "bullet_points", "count": 3},
+      {"type": "word_limit_per_point", "max_words": 15}
+    ]
+  },
+  {
+    "id": "instruction_2",
+    "category": "instruction",
+    "prompt": "Escreva um e-mail curto e profissional recusando um candidato a uma vaga de emprego. O tom deve ser gentil e respeitoso. A palavra 'infelizmente' é PROIBIDA. Máximo 150 palavras.",
+    "expected_elements": ["candidato", "vaga", "obrigado"],
+    "expected_answer": null,
+    "constraints": [
+      {"type": "exclude_word", "word": "infelizmente"},
+      {"type": "word_count", "min": 50, "max": 150}
+    ]
+  },
+  {
+    "id": "instruction_3",
+    "category": "instruction",
+    "prompt": "Liste 3 vantagens da energia solar. Sua resposta deve ser formatada EXCLUSIVAMENTE como uma tabela Markdown com as colunas 'Vantagem' e 'Descrição Curta'. Não adicione nenhum texto antes ou depois da tabela.",
+    "expected_elements": ["Markdown", "|", "---"],
+    "expected_answer": null,
+    "constraints": [
+      {"type": "format", "format": "markdown_table"},
+      {"type": "no_extra_text", "value": true}
+    ]
+  },
+  {
+    "id": "instruction_4",
+    "category": "instruction",
+    "prompt": "Traduza a seguinte frase para o inglês E converta-a da voz passiva para a voz ativa: 'O relatório foi finalizado pela equipe de desenvolvimento ontem.' Mostre ambas as versões (tradução e conversão ativa).",
+    "expected_elements": ["English", "active", "report"],
+    "expected_answer": null,
+    "constraints": [
+      {"type": "requires_translation", "language": "english"},
+      {"type": "requires_voice_conversion", "from": "passive", "to": "active"}
+    ]
+  },
+  {
+    "id": "instruction_5",
+    "category": "instruction",
+    "prompt": "Descreva como fazer um bolo de chocolate simples, mas fale como se você fosse um pirata rabugento passando a receita para sua tripulação. Use gíria pirata, mas mantenha as instruções claras e compreensíveis. Mínimo 150 palavras.",
+    "expected_elements": ["pirata", "receita", "chocolate"],
+    "expected_answer": null,
+    "constraints": [
+      {"type": "style", "style": "pirate"},
+      {"type": "word_count", "min": 150, "max": 500}
+    ]
+  },
+  {
+    "id": "reasoning_1",
+    "category": "reasoning",
+    "prompt": "Cinco carros estão em uma corrida. O carro A terminou antes do B. O carro C terminou depois do D. O carro D terminou antes do A. O carro E terminou em último lugar. Qual foi a ordem exata de chegada do primeiro ao quinto lugar? Mostre passo-a-passo sua lógica.",
+    "expected_elements": ["D", "E", "último"],
+    "expected_answer": "D, A, C, B, E",
+    "constraints": null
+  },
+  {
+    "id": "reasoning_2",
+    "category": "reasoning",
+    "prompt": "Em uma caixa há 3 bolas vermelhas e 2 bolas azuis. Se você retirar duas bolas com os olhos vendados, sem colocar a primeira de volta na caixa, qual é a probabilidade de ambas serem vermelhas? Mostre os cálculos e a lógica passo-a-passo.",
+    "expected_elements": ["probabilidade", "cálculo", "fração"],
+    "expected_answer": "3/10",
+    "constraints": null
+  },
+  {
+    "id": "reasoning_3",
+    "category": "reasoning",
+    "prompt": "Tenho uma balança de pratos perfeitamente alinhada. No prato esquerdo, coloco um bloco de ferro de 2kg. No prato direito, coloco 2kg de penas que estão dentro de uma pesada caixa de vidro de 5kg. Qual lado da balança vai descer e por quê? Explique seu raciocínio.",
+    "expected_elements": ["direito", "5kg", "2kg"],
+    "expected_answer": "direito",
+    "constraints": null
+  },
+  {
+    "id": "reasoning_4",
+    "category": "reasoning",
+    "prompt": "Para realizar um projeto, a Tarefa B só pode começar após a Tarefa A terminar. A Tarefa C pode ser feita a qualquer momento, em paralelo. A Tarefa D requer que B e C estejam prontas. Se A leva 2 horas, B leva 3 horas, C leva 4 horas e D leva 1 hora, qual é o tempo mínimo absoluto para concluir tudo? Mostre o diagrama de dependências.",
+    "expected_elements": ["horas", "paralelo", "total"],
+    "expected_answer": "7 horas",
+    "constraints": null
+  },
+  {
+    "id": "reasoning_5",
+    "category": "reasoning",
+    "prompt": "Um fazendeiro tem galinhas e vacas. Contando as cabeças dos animais, ele soma 20. Contando os pés, ele soma 56. Quantas galinhas e quantas vacas ele possui? Demonstre a solução passo-a-passo (pode ser um sistema de equações ou lógica pura).",
+    "expected_elements": ["galinhas", "vacas", "equação"],
+    "expected_answer": "8 vacas e 12 galinhas",
+    "constraints": null
+  }
+]

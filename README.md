@@ -4,26 +4,28 @@ Este projeto testa modelos GGUF locais, um por vez, mede desempenho e registra s
 
 ## Estrutura
 
-```text
+```
 .
 ├─ models/          # modelos locais, ignorados pelo Git
 ├─ reports/         # resultados locais, ignorados pelo Git
 ├─ scripts/
 │  ├─ benchmark_models.py
+│  ├─ benchmark_scorer.py
+│  ├─ prompts.json
 │  └─ run-server.ps1
 ├─ README.md
-├─ prompts.example.json
 ├─ index.html
-├─ LICENSE
 ├─ setup.ps1
 ├─ run-benchmark-auto.ps1
 ├─ .gitignore
 └─ .git
-
 ```
 
-## Como usar
+## License
 
+Este projeto está licenciado sob os termos da [MIT License](LICENSE).
+
+## Como usar
 1. Coloque os modelos `.gguf` em `models/`.
 
 2. Rode o setup.ps1

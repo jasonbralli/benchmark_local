@@ -106,6 +106,16 @@
       </div>
     </section>
 
+    <section class="panel">
+      <h2>Pontuação e estatísticas avançadas</h2>
+      <div class="table-wrap">
+        <table id="advancedTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
     <p class="footer" id="status">Nenhum arquivo carregado ainda.</p>
   </div>
 
@@ -160,6 +170,8 @@
       const avgSize = total ? models.reduce((sum, m) => sum + (m.model_size_bytes ?? 0), 0) / total : 0;
       const observed = total ? models.reduce((sum, m) => sum + (m.observed_state_size_bytes ?? 0), 0) / total : 0;
       const avgKv = total ? models.reduce((sum, m) => sum + (m.estimated_kv_cache_bytes ?? 0), 0) / total : 0;
+      const bestScore = total ? Math.max(...models.map((m) => m.final_score ?? 0)) : 0;
+      const bestVariance = total ? Math.min(...models.map((m) => m.variance ?? 0)) : 0;
       return [
         { label: "Modelos", value: fmt0.format(total), detail: "Arquivos benchmarkados" },
         { label: "Avg tok/s", value: fmt1.format(avgTps), detail: "Média geral do ranking" },
@@ -167,6 +179,8 @@
         { label: "Carga média", value: `${fmt1.format(sizeGiB(avgLoaded))} GiB`, detail: "Arquivo + contexto estimado" },
         { label: "State médio", value: fmtGiB(observed), detail: "Maior estado observado" },
         { label: "KV médio", value: fmtGiB(avgKv), detail: "KV cache estimada" },
+        { label: "Melhor score", value: fmt1.format(bestScore), detail: "Menor variância entre modelos" },
+        { label: "Melhor variância", value: fmt1.format(bestVariance), detail: "Mais consistente" },
       ];
     }
     function render(data) {
@@ -177,7 +191,7 @@
         <div class="metric"><div class="label">${m.label}</div><div class="value">${m.value}</div><div class="detail">${m.detail}</div></div>
       `).join("");
       const categories = ["coding", "extraction", "instruction", "reasoning"];
-      const simpleColumns = ["ranking", ...categories, "média"];
+      const simpleColumns = ["ranking", ...categories, "Média"];
       const headClasses = ["head-ranking", "head-coding", "head-extraction", "head-instruction", "head-reasoning", "head-media"];
       el("simpleTable").querySelector("thead").innerHTML = `<tr>${simpleColumns.map((c, index) => `<th class="${headClasses[index]}">${c}</th>`).join("")}</tr>`;
       const simpleRows = sortSimpleRows(models.map(buildSimpleRow));
@@ -230,6 +244,47 @@
           render(data);
         };
       });
+      const advancedColumns = [
+        { key: "model", label: "Modelo" },
+        { key: "final_score", label: "Final" },
+        { key: "variance", label: "Variância" },
+        { key: "success_rate", label: "Sucesso" },
+        { key: "coding", label: "Coding" },
+        { key: "extraction", label: "Extraction" },
+        { key: "instruction", label: "Instruction" },
+        { key: "reasoning", label: "Reasoning" },
+        { key: "min_tokens_per_second", label: "Min tok/s" },
+        { key: "max_tokens_per_second", label: "Max tok/s" },
+        { key: "avg_elapsed_seconds", label: "Avg elapsed s" },
+        { key: "avg_tokens_generated", label: "Avg tokens" },
+      ];
+      el("advancedTable").querySelector("thead").innerHTML = `<tr>${advancedColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el("advancedTable").querySelector("tbody").innerHTML = models.map((m) => {
+        const score = m.scores ?? {};
+        return `<tr>
+          <td>${m.model}</td>
+          <td>${fmt1.format(m.final_score ?? 0)}</td>
+          <td>${fmt1.format(m.variance ?? 0)}</td>
+          <td>${fmt1.format((m.success_rate ?? 0) * 100)}%</td>
+          <td>${fmt1.format(score.coding ?? 0)}</td>
+          <td>${fmt1.format(score.extraction ?? 0)}</td>
+          <td>${fmt1.format(score.instruction ?? 0)}</td>
+          <td>${fmt1.format(score.reasoning ?? 0)}</td>
+          <td>${fmt1.format(m.min_tokens_per_second ?? 0)}</td>
+          <td>${fmt1.format(m.max_tokens_per_second ?? 0)}</td>
+          <td>${fmt1.format(m.avg_elapsed_seconds ?? 0)}</td>
+          <td>${fmt1.format(m.avg_tokens_generated ?? 0)}</td>
+        </tr>`;
+      }).join("");
+      el("advancedTable").querySelectorAll("th").forEach((th) => {
+        th.onclick = () => {
+          const key = th.dataset.key;
+          if (key === "model") return;
+          if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+          else { state.sortKey = key; state.sortDir = "desc"; }
+          render(data);
+        };
+      });
     }
     async function loadJson(text) { render(JSON.parse(text)); }
     el("fileInput").addEventListener("change", async (e) => {
@@ -239,9 +294,70 @@
     });
     async function loadDefault() {
       const response = await fetch("reports/benchmark_results.dashboard.json", { cache: "no-store" });
-      await loadJson(await response.text());
+      const text = await response.text();
+      let data = JSON.parse(text);
+      data = await enrichWithCsv(data);
+      await loadJson(JSON.stringify(data));
     }
     el("reloadData").addEventListener("click", loadDefault);
+    async function loadCsv(path) {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) return null;
+      const text = await response.text();
+      const lines = text.split(/\n/).filter((l) => l.trim());
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(",").map((h) => h.trim());
+      return lines.slice(1).map((line) => {
+        const values = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => {
+          const raw = values[i]?.trim() ?? "";
+          const number = Number(raw);
+          row[h] = raw === "" || !Number.isFinite(number) ? raw : number;
+        });
+        return row;
+      });
+    }
+    async function enrichWithCsv(data) {
+      const [summaryRows, scoringRows] = await Promise.all([
+        loadCsv("reports/benchmark_results.summary.csv"),
+        loadCsv("reports/scoring_summary.csv"),
+      ]);
+      const byModel = {};
+      for (const m of data.models ?? []) byModel[m.model] = m;
+      if (summaryRows) {
+        for (const row of summaryRows) {
+          const model = byModel[row.model];
+          if (!model) continue;
+          model.categories = model.categories ?? {};
+          model.categories.coding = { avg_tokens_per_second: Number(row.avg_tokens_per_second_coding ?? 0) };
+          model.categories.extraction = { avg_tokens_per_second: Number(row.avg_tokens_per_second_extraction ?? 0) };
+          model.categories.instruction = { avg_tokens_per_second: Number(row.avg_tokens_per_second_instruction ?? 0) };
+          model.categories.reasoning = { avg_tokens_per_second: Number(row.avg_tokens_per_second_reasoning ?? 0) };
+          model.min_tokens_per_second = Number(row.min_tokens_per_second ?? 0);
+          model.max_tokens_per_second = Number(row.max_tokens_per_second ?? 0);
+          model.avg_elapsed_seconds = Number(row.avg_elapsed_seconds ?? 0);
+          model.avg_tokens_generated = Number(row.avg_tokens_generated ?? 0);
+        }
+      }
+      if (scoringRows) {
+        for (const row of scoringRows) {
+          const model = byModel[row.model];
+          if (!model) continue;
+          model.final_score = Number(row.final_score ?? 0);
+          model.variance = Number(row.variance ?? 0);
+          model.success_rate = Number(row.success_rate ?? 0);
+          model.scores = {
+            coding: Number(row.coding ?? 0),
+            extraction: Number(row.extraction ?? 0),
+            instruction: Number(row.instruction ?? 0),
+            reasoning: Number(row.reasoning ?? 0),
+          };
+        }
+      }
+      return data;
+    }
+    async function loadJson(text) { render(JSON.parse(text)); }
     window.addEventListener("DOMContentLoaded", async () => {
       try { await loadDefault(); }
       catch { el("status").textContent = "Não consegui carregar automaticamente. Use o botão Carregar JSON."; }
