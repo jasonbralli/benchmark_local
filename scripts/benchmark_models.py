@@ -644,6 +644,8 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
             entry["final_score"] = s.get("final_score", 0.0)
             entry["variance"] = s.get("variance", 0.0)
             entry["success_rate"] = s.get("success_rate", 0.0)
+            entry["successful_prompts"] = s.get("successful_prompts", successful)
+            entry["prompts_tested"] = s.get("total_prompts", prompts_tested)
             entry["scores"] = {
                 "coding": s.get("coding", 0.0),
                 "extraction": s.get("extraction", 0.0),
@@ -946,6 +948,7 @@ def main() -> int:
                 responses = {row.prompt_id: row.response_body for row in model_rows}
                 evaluated = evaluator.evaluate_model(model.name, responses, prompts_map)
                 print_results(evaluated)
+                real_passed = sum(1 for r in evaluated.detailed_results if r.passed)
                 scoring_payload = {
                     "model": model.name,
                     "final_score": evaluated.final_score,
@@ -960,9 +963,9 @@ def main() -> int:
                         "variance": evaluated.variance,
                         **evaluated.scores_by_category,
                         "total_prompts": len(model_rows),
-                        "successful_prompts": sum(1 for r in model_rows if r.return_code == 0),
+                        "successful_prompts": real_passed,
                         "success_rate": (
-                            sum(1 for r in model_rows if r.return_code == 0) / len(model_rows)
+                            real_passed / len(model_rows)
                             if model_rows
                             else 0.0
                         ),

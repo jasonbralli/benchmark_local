@@ -44,18 +44,11 @@
     .metric .detail { color: var(--muted); margin-top: 6px; font-size: 0.92rem; }
     .panel { padding: 16px; margin-bottom: 16px; }
     .panel h2 { margin: 0 0 10px; font-size: 1.05rem; }
-    .grid-2 { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
     .table-wrap { overflow: auto; border-radius: 14px; }
     table { width: 100%; border-collapse: collapse; min-width: 960px; }
     th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.14); white-space: nowrap; }
     th { position: sticky; top: 0; background: rgba(15, 23, 42, 0.96); color: #cbd5e1; cursor: pointer; user-select: none; }
     tr:hover td { background: rgba(125, 211, 252, 0.05); }
-    .col-ranking, .head-ranking { background: rgba(99, 102, 241, 0.10); }
-    .col-coding, .head-coding { background: rgba(56, 189, 248, 0.05); }
-    .col-extraction, .head-extraction { background: rgba(34, 197, 94, 0.05); }
-    .col-instruction, .head-instruction { background: rgba(245, 158, 11, 0.05); }
-    .col-reasoning, .head-reasoning { background: rgba(168, 85, 247, 0.05); }
-    .col-media, .head-media { background: rgba(148, 163, 184, 0.08); font-weight: 700; }
     .muted { color: var(--muted); }
     .badge { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); color: #cbd5e1; font-size: 0.84rem; }
     .footer { color: var(--muted); margin: 20px 0 10px; font-size: 0.92rem; }
@@ -87,7 +80,7 @@
     <div class="metrics" id="metrics"></div>
 
     <section class="panel">
-      <h2>Comparativo simples</h2>
+      <h2>Performance</h2>
       <div class="table-wrap">
         <table id="simpleTable">
           <thead></thead>
@@ -97,9 +90,19 @@
     </section>
 
     <section class="panel">
-      <h2>Detalhes técnicos</h2>
+      <h2>Qualidade</h2>
       <div class="table-wrap">
-      <table id="modelsTable">
+        <table id="qualityTable">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Consistência</h2>
+      <div class="table-wrap">
+      <table id="advancedTable">
         <thead></thead>
         <tbody></tbody>
         </table>
@@ -107,11 +110,11 @@
     </section>
 
     <section class="panel">
-      <h2>Pontuação e estatísticas avançadas</h2>
+      <h2>Recursos</h2>
       <div class="table-wrap">
-        <table id="advancedTable">
-          <thead></thead>
-          <tbody></tbody>
+      <table id="modelsTable">
+        <thead></thead>
+        <tbody></tbody>
         </table>
       </div>
     </section>
@@ -123,7 +126,7 @@
   {"models": [{"model": "Qwable-5-27B-Coder.Q2_K.gguf", "model_path": "C:\\Users\\Jason\\Desktop\\PROJETOS\\03 - DONE\\benchmark_local\\models\\Qwable-5-27B-Coder.Q2_K.gguf", "model_size_bytes": 10864592384, "model_size_gib": 10.1184, "context_size": 46592, "server_ctx_train": 262144, "observed_state_size_bytes": 0, "observed_state_size_gib": 0.0, "estimated_kv_cache_bytes": 1526726656, "estimated_kv_cache_gib": 1.4219, "estimated_loaded_bytes": 12391319040, "estimated_loaded_gib": 11.5403, "avg_tokens_per_second": 28.16, "prompts_tested": 20, "successful_prompts": 20, "categories": {"coding": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5033, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.4279}, "extraction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5616, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.0601}, "instruction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 3.7854, "avg_tokens_generated": 106.2, "avg_tokens_per_second": 27.8383}, "reasoning": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5211, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.3137}}, "final_score": 7.707000000000002, "variance": 1.6437656343062765, "success_rate": 1.0, "scores": {"coding": 7.065, "extraction": 9.4, "instruction": 7.75, "reasoning": 5.11}, "min_tokens_per_second": 27.8383, "max_tokens_per_second": 28.4279, "avg_elapsed_seconds": 4.3429, "avg_tokens_generated": 122.55}], "categories": ["coding", "extraction", "instruction", "reasoning"], "category_summaries": {"coding": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5033, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.4279}, "extraction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5616, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.0601}, "instruction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 3.7854, "avg_tokens_generated": 106.2, "avg_tokens_per_second": 27.8383}, "reasoning": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5211, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.3137}}}
   </script>
   <script>
-    const state = { data: null, sortKey: "avg_tokens_per_second", sortDir: "desc", simpleSortKey: "media", simpleSortDir: "desc" };
+    const state = { data: null, sortKey: "avg_tokens_per_second", sortDir: "desc" };
     const el = (id) => document.getElementById(id);
     const fmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
     const fmt1 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -135,20 +138,25 @@
     function sortModels(models) {
       const { sortKey, sortDir } = state;
       return [...models].sort((a, b) => {
-        const av = a[sortKey] ?? 0;
-        const bv = b[sortKey] ?? 0;
-        const diff = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+        let av = a[sortKey];
+        let bv = b[sortKey];
+        if (sortKey === "media") {
+          const aCats = a.categories ?? {};
+          const bCats = b.categories ?? {};
+          const aVals = ["coding", "extraction", "instruction", "reasoning"].map((c) => Number(aCats[c]?.avg_tokens_per_second ?? 0));
+          const bVals = ["coding", "extraction", "instruction", "reasoning"].map((c) => Number(bCats[c]?.avg_tokens_per_second ?? 0));
+          av = aVals.reduce((sum, value) => sum + value, 0) / (aVals.length || 1);
+          bv = bVals.reduce((sum, value) => sum + value, 0) / (bVals.length || 1);
+        }
+        const diff = typeof av === "string" ? av.localeCompare(bv) : (av ?? 0) - (bv ?? 0);
         return sortDir === "asc" ? diff : -diff;
       });
     }
-    function sortSimpleRows(rows) {
-      const { simpleSortKey, simpleSortDir } = state;
-      return [...rows].sort((a, b) => {
-        const av = a[simpleSortKey] ?? 0;
-        const bv = b[simpleSortKey] ?? 0;
-        const diff = typeof av === "string" ? av.localeCompare(bv) : av - bv;
-        return simpleSortDir === "asc" ? diff : -diff;
-      });
+    function evaluateText(score) {
+      if (score >= 8.5) return "Excelente";
+      if (score >= 7) return "Bom";
+      if (score >= 4) return "Regular";
+      return "Fraco";
     }
     function buildSimpleRow(model) {
       const modelCats = model.categories ?? {};
@@ -158,6 +166,7 @@
       const media = collected.length ? collected.reduce((sum, value) => sum + value, 0) / collected.length : 0;
       return {
         model: model.model,
+        avg_tokens_per_second: model.avg_tokens_per_second ?? 0,
         coding: values[0] ?? 0,
         extraction: values[1] ?? 0,
         instruction: values[2] ?? 0,
@@ -168,22 +177,15 @@
     function aggregateMetrics(data) {
       const models = data.models ?? [];
       const total = models.length;
-      const avgTps = total ? models.reduce((sum, m) => sum + (m.avg_tokens_per_second ?? 0), 0) / total : 0;
-      const avgLoaded = total ? models.reduce((sum, m) => sum + (m.estimated_loaded_bytes ?? 0), 0) / total : 0;
-      const avgSize = total ? models.reduce((sum, m) => sum + (m.model_size_bytes ?? 0), 0) / total : 0;
-      const observed = total ? models.reduce((sum, m) => sum + (m.observed_state_size_bytes ?? 0), 0) / total : 0;
-      const avgKv = total ? models.reduce((sum, m) => sum + (m.estimated_kv_cache_bytes ?? 0), 0) / total : 0;
+      const bestTps = total ? Math.max(...models.map((m) => m.avg_tokens_per_second ?? 0)) : 0;
       const bestScore = total ? Math.max(...models.map((m) => m.final_score ?? 0)) : 0;
       const bestVariance = total ? Math.min(...models.map((m) => m.variance ?? 0)) : 0;
+      const avgLoaded = total ? models.reduce((sum, m) => sum + (m.estimated_loaded_bytes ?? 0), 0) / total : 0;
       return [
-        { label: "Modelos", value: fmt0.format(total), detail: "Arquivos benchmarkados" },
-        { label: "Avg tok/s", value: fmt1.format(avgTps), detail: "Média geral do ranking" },
-        { label: "Modelo médio", value: `${fmt1.format(sizeGiB(avgSize))} GiB`, detail: "Tamanho do arquivo" },
-        { label: "Carga média", value: `${fmt1.format(sizeGiB(avgLoaded))} GiB`, detail: "Arquivo + contexto estimado" },
-        { label: "State médio", value: fmtGiB(observed), detail: "Maior estado observado" },
-        { label: "KV médio", value: fmtGiB(avgKv), detail: "KV cache estimada" },
-        { label: "Melhor score", value: fmt1.format(bestScore), detail: "Menor variância entre modelos" },
-        { label: "Melhor variância", value: fmt1.format(bestVariance), detail: "Mais consistente" },
+        { label: "Performance", value: fmt1.format(bestTps), detail: "Maior avg tok/s" },
+        { label: "Qualidade", value: fmt1.format(bestScore), detail: "Melhor final score" },
+        { label: "Consistência", value: fmt1.format(bestVariance), detail: "Menor variância" },
+        { label: "Recursos", value: `${fmt1.format(sizeGiB(avgLoaded))} GiB`, detail: "Carga média" },
       ];
     }
     function render(data) {
@@ -194,97 +196,117 @@
         <div class="metric"><div class="label">${m.label}</div><div class="value">${m.value}</div><div class="detail">${m.detail}</div></div>
       `).join("");
       const categories = ["coding", "extraction", "instruction", "reasoning"];
-      const simpleColumns = ["ranking", ...categories, "Média"];
-      const headClasses = ["head-ranking", "head-coding", "head-extraction", "head-instruction", "head-reasoning", "head-media"];
-      el("simpleTable").querySelector("thead").innerHTML = `<tr>${simpleColumns.map((c, index) => `<th class="${headClasses[index]}">${c}</th>`).join("")}</tr>`;
-      const simpleRows = sortSimpleRows(models.map(buildSimpleRow));
-      el("simpleTable").querySelector("tbody").innerHTML = simpleRows.map((row, index) => `
-        <tr>
-          <td class="col-ranking"><strong>#${index + 1} ${row.model}</strong></td>
-          <td class="col-coding">${fmt1.format(row.coding)}</td>
-          <td class="col-extraction">${fmt1.format(row.extraction)}</td>
-          <td class="col-instruction">${fmt1.format(row.instruction)}</td>
-          <td class="col-reasoning">${fmt1.format(row.reasoning)}</td>
-          <td class="col-media">${fmt1.format(row.media)}</td>
-        </tr>
-      `).join("");
-      el("simpleTable").querySelectorAll("th").forEach((th, index) => {
-        th.onclick = () => {
-          const keys = ["ranking", "coding", "extraction", "instruction", "reasoning", "media"];
-          const key = keys[index];
-          if (key === "ranking") return;
-          if (state.simpleSortKey === key) state.simpleSortDir = state.simpleSortDir === "asc" ? "desc" : "asc";
-          else { state.simpleSortKey = key; state.simpleSortDir = "desc"; }
-          render(data);
-        };
-      });
-      const columns = [
-        { key: "rank", label: "#" },
+      const performanceColumns = [
         { key: "model", label: "Modelo" },
         { key: "avg_tokens_per_second", label: "Avg tok/s" },
-        { key: "prompts_tested", label: "Prompts" },
-        { key: "successful_prompts", label: "Ok" },
-        { key: "model_size_gib", label: "Modelo GiB" },
-        { key: "estimated_loaded_gib", label: "Carga GiB" },
-        { key: "observed_state_size_gib", label: "State GiB" },
-        { key: "context_size", label: "Ctx" },
-        { key: "server_ctx_train", label: "Ctx train" },
       ];
-      el("modelsTable").querySelector("thead").innerHTML = `<tr>${columns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
-      el("modelsTable").querySelector("tbody").innerHTML = models.map((m, index) => `
+      categories.forEach((cat) => performanceColumns.push({ key: cat, label: cat }));
+      el("simpleTable").querySelector("thead").innerHTML = `<tr>${performanceColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      const performanceRows = models.map((m) => {
+        const catVals = categories.map((c) => Number((m.categories ?? {})[c]?.avg_tokens_per_second ?? 0));
+        const collected = catVals.filter((n) => Number.isFinite(n));
+        const avgPerformance = collected.length ? collected.reduce((sum, value) => sum + value, 0) / collected.length : 0;
+        return { model: m.model, avg_tokens_per_second: m.avg_tokens_per_second ?? 0, ...Object.fromEntries(categories.map((c, idx) => [c, catVals[idx]])) };
+      });
+      el("simpleTable").querySelector("tbody").innerHTML = performanceRows.map((row) => `
         <tr>
-          <td>${index + 1}</td><td>${m.model}</td><td>${fmt1.format(m.avg_tokens_per_second ?? 0)}</td>
-          <td>${fmt0.format(m.prompts_tested ?? 0)}</td><td>${fmt0.format(m.successful_prompts ?? 0)}</td>
-          <td>${fmt1.format(m.model_size_gib ?? 0)}</td><td>${fmt1.format(m.estimated_loaded_gib ?? 0)}</td>
-          <td>${m.observed_state_size_gib ? fmt1.format(m.observed_state_size_gib) : "N/A"}</td><td>${fmt0.format(m.context_size ?? 0)}</td><td>${m.server_ctx_train || "N/A"}</td>
+          <td>${row.model}</td>
+          <td>${fmt1.format(row.avg_tokens_per_second ?? 0)}</td>
+          ${categories.map((c) => `<td>${fmt1.format(row[c] ?? 0)}</td>`).join("")}
         </tr>
       `).join("");
-      el("modelsTable").querySelectorAll("th").forEach((th) => {
+      el("simpleTable").querySelectorAll("th").forEach((th) => {
         th.onclick = () => {
           const key = th.dataset.key;
+          if (key === "model") return;
           if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
           else { state.sortKey = key; state.sortDir = "desc"; }
           render(data);
         };
       });
-      const advancedColumns = [
+      const qualityColumns = [
         { key: "model", label: "Modelo" },
-        { key: "final_score", label: "Final" },
-        { key: "variance", label: "Variância" },
+        { key: "prompts_tested", label: "Prompts" },
+        { key: "successful_prompts", label: "Ok" },
         { key: "success_rate", label: "Sucesso" },
-        { key: "coding", label: "Coding" },
-        { key: "extraction", label: "Extraction" },
-        { key: "instruction", label: "Instruction" },
-        { key: "reasoning", label: "Reasoning" },
-        { key: "min_tokens_per_second", label: "Min tok/s" },
-        { key: "max_tokens_per_second", label: "Max tok/s" },
-        { key: "avg_elapsed_seconds", label: "Avg elapsed s" },
-        { key: "avg_tokens_generated", label: "Avg tokens" },
+        { key: "final_score", label: "Final" },
+        { key: "evaluation", label: "Avaliação" },
       ];
-      el("advancedTable").querySelector("thead").innerHTML = `<tr>${advancedColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
-      el("advancedTable").querySelector("tbody").innerHTML = models.map((m) => {
+      el("qualityTable").querySelector("thead").innerHTML = `<tr>${qualityColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el("qualityTable").querySelector("tbody").innerHTML = models.map((m) => {
         const score = m.scores ?? {};
         return `<tr>
           <td>${m.model}</td>
+          <td>${fmt0.format(m.prompts_tested ?? 0)}</td>
+          <td>${fmt0.format(m.successful_prompts ?? 0)}</td>
+          <td>${fmt1.format(((m.successful_prompts ?? 0) / (m.prompts_tested || 1)) * 100)}%</td>
           <td>${fmt1.format(m.final_score ?? 0)}</td>
+          <td>${evaluateText(m.final_score ?? 0)}</td>
+        </tr>`;
+      }).join("");
+      el("qualityTable").querySelectorAll("th").forEach((th) => {
+        th.onclick = () => {
+          const key = th.dataset.key;
+          if (key === "model" || key === "evaluation") return;
+          if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+          else { state.sortKey = key; state.sortDir = "desc"; }
+          render(data);
+        };
+      });
+      const consistencyColumns = [
+        { key: 'model', label: 'Modelo' },
+        { key: 'variance', label: 'Variância' },
+        { key: 'min_tokens_per_second', label: 'Min tok/s' },
+        { key: 'max_tokens_per_second', label: 'Max tok/s' },
+        { key: 'avg_elapsed_seconds', label: 'Avg elapsed s' },
+        { key: 'avg_tokens_generated', label: 'Avg tokens' },
+      ];
+      el('advancedTable').querySelector('thead').innerHTML = `<tr>${consistencyColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el('advancedTable').querySelector('tbody').innerHTML = models.map((m) => {
+        return `<tr>
+          <td>${m.model}</td>
           <td>${fmt1.format(m.variance ?? 0)}</td>
-          <td>${fmt1.format((m.success_rate ?? 0) * 100)}%</td>
-          <td>${fmt1.format(score.coding ?? 0)}</td>
-          <td>${fmt1.format(score.extraction ?? 0)}</td>
-          <td>${fmt1.format(score.instruction ?? 0)}</td>
-          <td>${fmt1.format(score.reasoning ?? 0)}</td>
           <td>${fmt1.format(m.min_tokens_per_second ?? 0)}</td>
           <td>${fmt1.format(m.max_tokens_per_second ?? 0)}</td>
           <td>${fmt1.format(m.avg_elapsed_seconds ?? 0)}</td>
           <td>${fmt1.format(m.avg_tokens_generated ?? 0)}</td>
         </tr>`;
       }).join("");
-      el("advancedTable").querySelectorAll("th").forEach((th) => {
+      el('advancedTable').querySelectorAll('th').forEach((th) => {
         th.onclick = () => {
           const key = th.dataset.key;
-          if (key === "model") return;
-          if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-          else { state.sortKey = key; state.sortDir = "desc"; }
+          if (key === 'model') return;
+          if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+          else { state.sortKey = key; state.sortDir = 'desc'; }
+          render(data);
+        };
+      });
+
+      const resourceColumns = [
+        { key: 'model', label: 'Modelo' },
+        { key: 'model_size_gib', label: 'Size' },
+        { key: 'estimated_kv_cache_gib', label: 'KV cache' },
+        { key: 'estimated_loaded_gib', label: 'Carga GiB' },
+        { key: 'context_size', label: 'Ctx' },
+        { key: 'server_ctx_train', label: 'Ctx train' },
+      ];
+      el('modelsTable').querySelector('thead').innerHTML = `<tr>${resourceColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el('modelsTable').querySelector('tbody').innerHTML = models.map((m) => `
+        <tr>
+          <td>${m.model}</td>
+          <td>${fmt1.format(m.model_size_gib ?? 0)}</td>
+          <td>${fmt1.format(m.estimated_kv_cache_gib ?? 0)}</td>
+          <td>${fmt1.format(m.estimated_loaded_gib ?? 0)}</td>
+          <td>${fmt0.format(m.context_size ?? 0)}</td>
+          <td>${m.server_ctx_train || 'N/A'}</td>
+        </tr>
+      `).join("");
+      el('modelsTable').querySelectorAll('th').forEach((th) => {
+        th.onclick = () => {
+          const key = th.dataset.key;
+          if (key === 'model') return;
+          if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+          else { state.sortKey = key; state.sortDir = 'desc'; }
           render(data);
         };
       });
