@@ -943,12 +943,6 @@ def main() -> int:
                     "scores_by_category": evaluated.scores_by_category,
                     "detailed_results": [asdict(r) for r in evaluated.detailed_results],
                 }
-                scoring_path = args.output.with_name(f"scoring_{model.name}.json")
-                scoring_path.write_text(
-                    json.dumps(scoring_payload, indent=2, ensure_ascii=False),
-                    encoding="utf-8",
-                )
-                print(f"  Scoring salvo em: {scoring_path}")
                 scoring_summaries.append(
                     {
                         "model": model.name,
@@ -970,25 +964,10 @@ def main() -> int:
                 print("  servidor finalizado")
 
     write_results_csv(args.output, results)
-    summary_output = args.output.with_name(f"{args.output.stem}.summary{args.output.suffix}")
-    ranking_output = args.output.with_name(f"{args.output.stem}.ranking{args.output.suffix}")
     dashboard_output = args.output.with_name(f"{args.output.stem}.dashboard.json")
-    write_summary_csv(summary_output, results)
-    write_ranking_csv(ranking_output, results)
     write_dashboard_json(dashboard_output, results, scoring_summaries or None)
     print(f"\nResultados salvos em: {args.output.resolve()}")
-    print(f"Resumo salvo em: {summary_output.resolve()}")
-    print(f"Ranking salvo em: {ranking_output.resolve()}")
     print(f"Dashboard salvo em: {dashboard_output.resolve()}")
-
-    if scoring_summaries:
-        scoring_summaries.sort(key=lambda item: item["final_score"], reverse=True)
-        scoring_csv = args.output.with_name("scoring_summary.csv")
-        with scoring_csv.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=list(scoring_summaries[0].keys()))
-            writer.writeheader()
-            writer.writerows(scoring_summaries)
-        print(f"Scoring summary salvo em: {scoring_csv.resolve()}")
 
     return 0
 

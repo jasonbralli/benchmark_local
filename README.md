@@ -8,54 +8,27 @@ Este projeto testa modelos GGUF locais, um por vez, mede desempenho e registra s
 .
 ├─ models/          # modelos locais, ignorados pelo Git
 ├─ reports/         # resultados locais, ignorados pelo Git
+│  └─ server-logs/  # logs dos servidores por modelo
 ├─ scripts/
 │  ├─ benchmark_models.py
 │  ├─ benchmark_scorer.py
-│  ├─ prompts.json
-│  └─ run-server.ps1
-├─ README.md
+│  └─ prompts.json
 ├─ index.html
-├─ setup.ps1
 ├─ run-benchmark-auto.ps1
 ├─ .gitignore
-└─ .git
+└─ LICENSE
 ```
-
-## License
-
-Este projeto está licenciado sob os termos da [MIT License](LICENSE).
 
 ## Como usar
+
 1. Coloque os modelos `.gguf` em `models/`.
-
-2. Rode o setup.ps1
-
-```powershell
-.\setup.ps1
-```
-3. Rode o benchmark:
+2. Rode o benchmark:
 
 ```powershell
 .\run-benchmark-auto.ps1
 ```
 
-4. Abra o painel:
-
-```text
-./index.html
-```
-
-Se quiser servir a pasta via HTTP:
-
-```powershell
-python -m http.server 8000
-```
-
-Depois acesse:
-
-```text
-http://localhost:8000/
-```
+Ao final, o dashboard abre automaticamente em **http://localhost:8000/** com os dados carregados.
 
 ## O que o benchmark faz
 
@@ -74,43 +47,24 @@ http://localhost:8000/
   - estado observado no log do servidor
 - gera relatórios em `reports/`
 
-## Arquivos gerados
+## Saídas geradas
 
 - `reports/benchmark_results.csv`
-- `reports/benchmark_results.summary.csv`
-- `reports/benchmark_results.ranking.csv`
 - `reports/benchmark_results.dashboard.json`
+- `reports/dashboard_data.js`
 - `reports/server-logs/*.log`
 
-Os arquivos em `models/` e `reports/` não devem ser enviados ao GitHub. O repositório mantém apenas a estrutura com arquivos `.gitkeep`.
-
-## Métricas de memória
-
-Os campos mais importantes são:
-
-- `model_size_bytes`: tamanho do arquivo em disco
-- `context_size`: janela de contexto usada no teste
-- `server_ctx_train`: contexto de treino reportado pelo servidor
-- `observed_state_size_bytes`: maior estado observado no log do servidor
-- `estimated_kv_cache_bytes`: estimativa de KV cache usada pelo benchmark
-- `estimated_loaded_bytes`: soma do arquivo com a carga de contexto observada ou estimada
-
-Essas métricas ajudam a comparar não só velocidade, mas também viabilidade local.
+Os arquivos em `models/` e `reports/` não são enviados ao GitHub.
 
 ## Dashboard
 
-O arquivo `index.html` lê o JSON de `reports/benchmark_results.dashboard.json`.
+O arquivo `index.html` é servido pelo próprio `run-benchmark-auto.ps1` em `http://localhost:8000/`. O painel carrega os dados embarcados em `reports/dashboard_data.js` para evitar bloqueios de `file://`.
 
-O painel tem dois blocos:
+O painel tem três blocos:
+- comparativo simples por modelo e categoria
+- detalhes técnicos com métricas de memória e contexto
+- pontuação e estatísticas avançadas
 
-- um comparativo simples por modelo e categoria
-- um bloco técnico com as métricas detalhadas
+## Licença
 
-## Sobre o GitHub
-
-A organização atual já está pronta para versionamento:
-
-- `scripts/` para automação
-- `README/` para documentação e exemplos
-- `models/` para seus modelos locais
-- `reports/` para saídas geradas, normalmente ignoradas pelo Git
+MIT

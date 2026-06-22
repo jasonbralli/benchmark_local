@@ -82,9 +82,27 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "✓ Benchmark concluído com sucesso!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Abrindo dashboard..." -ForegroundColor Cyan
-    $dashboard = Join-Path $ROOT "index.html"
-    Start-Process $dashboard
+    Write-Host "Iniciando dashboard em http://localhost:8000 ..." -ForegroundColor Cyan
+    $port = 8000
+    $server = Start-Process python -ArgumentList "-m","http.server","$port","--directory",$ROOT -WindowStyle Hidden -PassThru
+    # Espera a porta ficar disponível
+    $retries = 20
+    while ($retries -gt 0) {
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $tcp.Connect("127.0.0.1", $port)
+            $tcp.Close()
+            break
+        } catch {
+            $retries--
+            Start-Sleep -Milliseconds 300
+        }
+    }
+    if ($retries -gt 0) {
+        Start-Process "http://localhost:$port/"
+    } else {
+        Write-Host "❌ Não foi possível iniciar o servidor HTTP." -ForegroundColor Red
+    }
 } else {
     Write-Host ""
     Write-Host "❌ Benchmark falhou com código $LASTEXITCODE" -ForegroundColor Red
