@@ -119,7 +119,9 @@
     <p class="footer" id="status">Nenhum arquivo carregado ainda.</p>
   </div>
 
-  <script src="reports/dashboard_data.js"></script>
+  <script id="dashboard-data" type="application/json">
+  <!-- BENCHMARK_DATA_PLACEHOLDER -->
+  </script>
   <script>
     const state = { data: null, sortKey: "avg_tokens_per_second", sortDir: "desc", simpleSortKey: "media", simpleSortDir: "desc" };
     const el = (id) => document.getElementById(id);
@@ -319,9 +321,11 @@
     }
     async function loadDefault() {
       try {
-        if (window.__DASHBOARD_DATA__) {
-          el("status").textContent = `Carregado: ${(window.__DASHBOARD_DATA__.models ?? []).length} modelos.`;
-          render(JSON.stringify(window.__DASHBOARD_DATA__));
+        const tag = document.getElementById("dashboard-data");
+        if (tag && tag.textContent && tag.textContent.trim() && !tag.textContent.includes("BENCHMARK_DATA_PLACEHOLDER")) {
+          const data = JSON.parse(tag.textContent);
+          el("status").textContent = `Carregado: ${(data.models ?? []).length} modelos.`;
+          render(JSON.stringify(data));
           return;
         }
         const text = await requestText("reports/benchmark_results.dashboard.json");

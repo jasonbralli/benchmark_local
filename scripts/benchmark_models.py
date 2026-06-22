@@ -658,8 +658,14 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
         "category_summaries": category_summaries,
     }
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    js_path = path.with_name("dashboard_data.js")
-    js_path.write_text(f"window.__DASHBOARD_DATA__ = {json.dumps(payload, ensure_ascii=False)};", encoding="utf-8")
+    html_path = path.parent.parent / "index.html"
+    if html_path.exists():
+        html = html_path.read_text(encoding="utf-8")
+        marker = "<!-- BENCHMARK_DATA_PLACEHOLDER -->"
+        if marker in html:
+            html = html.replace(marker, json.dumps(payload, ensure_ascii=False))
+            html_path.write_text(html, encoding="utf-8")
+            print(f"Dashboard atualizado em: {html_path.resolve()}")
 
 
 def main() -> int:
