@@ -120,7 +120,7 @@
   </div>
 
   <script id="dashboard-data" type="application/json">
-  <!-- BENCHMARK_DATA_PLACEHOLDER -->
+  {"models": [{"model": "Qwable-5-27B-Coder.Q2_K.gguf", "model_path": "C:\\Users\\Jason\\Desktop\\PROJETOS\\03 - DONE\\benchmark_local\\models\\Qwable-5-27B-Coder.Q2_K.gguf", "model_size_bytes": 10864592384, "model_size_gib": 10.1184, "context_size": 46592, "server_ctx_train": 262144, "observed_state_size_bytes": 0, "observed_state_size_gib": 0.0, "estimated_kv_cache_bytes": 1526726656, "estimated_kv_cache_gib": 1.4219, "estimated_loaded_bytes": 12391319040, "estimated_loaded_gib": 11.5403, "avg_tokens_per_second": 28.16, "prompts_tested": 20, "successful_prompts": 20, "categories": {"coding": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5033, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.4279}, "extraction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5616, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.0601}, "instruction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 3.7854, "avg_tokens_generated": 106.2, "avg_tokens_per_second": 27.8383}, "reasoning": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5211, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.3137}}, "final_score": 7.707000000000002, "variance": 1.6437656343062765, "success_rate": 1.0, "scores": {"coding": 7.065, "extraction": 9.4, "instruction": 7.75, "reasoning": 5.11}, "min_tokens_per_second": 27.8383, "max_tokens_per_second": 28.4279, "avg_elapsed_seconds": 4.3429, "avg_tokens_generated": 122.55}], "categories": ["coding", "extraction", "instruction", "reasoning"], "category_summaries": {"coding": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5033, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.4279}, "extraction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5616, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.0601}, "instruction": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 3.7854, "avg_tokens_generated": 106.2, "avg_tokens_per_second": 27.8383}, "reasoning": {"prompts_tested": 5, "successful_prompts": 5, "avg_elapsed_seconds": 4.5211, "avg_tokens_generated": 128.0, "avg_tokens_per_second": 28.3137}}}
   </script>
   <script>
     const state = { data: null, sortKey: "avg_tokens_per_second", sortDir: "desc", simpleSortKey: "media", simpleSortDir: "desc" };
@@ -326,6 +326,11 @@
           const data = JSON.parse(tag.textContent);
           el("status").textContent = `Carregado: ${(data.models ?? []).length} modelos.`;
           render(JSON.stringify(data));
+          return;
+        }
+        if (state.data) {
+          el("status").textContent = `Recarregado: ${(state.data.models ?? []).length} modelos.`;
+          render(JSON.stringify(state.data));
           return;
         }
         const text = await requestText("reports/benchmark_results.dashboard.json");

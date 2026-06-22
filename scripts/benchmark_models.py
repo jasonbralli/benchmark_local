@@ -650,6 +650,10 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
                 "instruction": s.get("instruction", 0.0),
                 "reasoning": s.get("reasoning", 0.0),
             }
+        entry["min_tokens_per_second"] = min((row.tokens_per_second for row in model_rows), default=0.0)
+        entry["max_tokens_per_second"] = max((row.tokens_per_second for row in model_rows), default=0.0)
+        entry["avg_elapsed_seconds"] = round(sum(row.elapsed_seconds for row in model_rows) / len(model_rows), 4) if model_rows else 0.0
+        entry["avg_tokens_generated"] = round(sum(row.tokens_generated for row in model_rows) / len(model_rows), 2) if model_rows else 0.0
         models.append(entry)
 
     payload = {
