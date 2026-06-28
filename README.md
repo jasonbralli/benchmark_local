@@ -13,7 +13,7 @@ Resultados de benchmark local de modelos GGUF em um painel unificado e autossufi
 
 3. Ao final, abra `index.html` e clique em **Carregar JSON** para subir `reports/benchmark_results.dashboard.json`.
 
-> O dashboard embute o JSON diretamente no HTML, sem depender de servidor HTTP.
+> O dashboard embute o JSON no HTML, mantendo tudo em arquivos estáticos, sem depender de servidor HTTP.
 
 ## Saídas geradas
 
@@ -32,7 +32,14 @@ O painel compara até 4 blocos:
 - **Consistência** — variância, min/max tok/s, tempo e tokens
 - **Recursos** — tamanho do modelo, KV cache, carga estimada e contexto
 
-Todos os blocos compartilham a mesma ordenação global. Basta clicar no cabeçalho de qualquer coluna para reorganizar todos os blocos juntos.
+## Recursos visuais e usabilidade
+
+- **Tooltips nos cabeçalhos dos blocos**: ao passar o mouse sobre *Performance*, *Qualidade*, *Consistência* ou *Recursos*, aparece uma descrição curta daquele bloco.
+- **Tooltips nas colunas das tabelas**: ao passar o mouse sobre cada título de coluna, uma dica explica rapidamente o que aquela métrica significa.
+- **Ordenação por coluna**: clique no título de qualquer coluna para ordenar a tabela.
+- **Indicador visual da ordenação**: a coluna ordenada exibe uma seta (`▲` ou `▼`), mostrando a direção atual sem precisar advinhar.
+- **Ordenação correta por categoria**: as colunas *coding*, *extraction*, *instruction* e *reasoning* agora usam o valor real dentro de `categories.<nome>.avg_tokens_per_second`, garantindo ordenação correta em vez de considerar a posição da linha.
+- **Exportar PDF**: o botão **Exportar PDF** usa a impressão nativa do navegador com estilo dedicado, permitindo salvar ou imprimir a visão atual do dashboard em um documento.
 
 ## Licença
 

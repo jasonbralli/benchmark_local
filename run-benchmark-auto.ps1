@@ -89,8 +89,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host (Join-Path $ROOT "reports\benchmark_results.dashboard.json")
     Write-Host ""
     Write-Host "Para visualizar:" -ForegroundColor Yellow
-    Write-Host "  1) Abra index.html e use o botao 'Carregar JSON', ou"
-    Write-Host "  2) Rode: python -m http.server 8000  |>  http://localhost:8000/"
+    Write-Host "  1) Abra index.html e use o botao 'Carregar JSON'"
 } else {
     Write-Host ""
     Write-Host "❌ Benchmark falhou com código $LASTEXITCODE" -ForegroundColor Red

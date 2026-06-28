@@ -46,15 +46,60 @@
     .panel h2 { margin: 0 0 10px; font-size: 1.05rem; }
     .table-wrap { overflow: auto; border-radius: 14px; }
     table { width: 100%; border-collapse: collapse; min-width: 960px; }
+    thead { overflow: visible; }
     th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.14); white-space: nowrap; }
     th { position: sticky; top: 0; background: rgba(15, 23, 42, 0.96); color: #cbd5e1; cursor: pointer; user-select: none; }
     tr:hover td { background: rgba(125, 211, 252, 0.05); }
     .muted { color: var(--muted); }
     .badge { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); color: #cbd5e1; font-size: 0.84rem; }
     .footer { color: var(--muted); margin: 20px 0 10px; font-size: 0.92rem; }
+    #global-tooltip {
+      position: fixed;
+      pointer-events: none;
+      display: none;
+      background: rgba(15, 23, 42, 0.96);
+      color: #e5eefb;
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      max-width: 260px;
+      text-align: center;
+      z-index: 9999;
+      box-shadow: 0 12px 40px rgba(2, 6, 23, 0.55);
+    }
+    .sort-icon {
+      display: inline-block;
+      width: 0; 
+      height: 0; 
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      margin-left: 6px;
+      vertical-align: middle;
+      opacity: 0;
+    }
+    .sort-icon.up { border-bottom: 5px solid var(--accent); opacity: 1; }
+    .sort-icon.down { border-top: 5px solid var(--accent); opacity: 1; }
     input[type="file"] { display: none; }
     @media (max-width: 980px) { .hero, .grid-2, .metrics { grid-template-columns: 1fr; } .actions { justify-content: flex-start; } }
-  </style>
+    @media print {
+      :root {
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: #475569;
+        --border: #e2e8f0;
+      }
+      body { background: #ffffff; color: var(--text); }
+      .hero-card, .btn, input[type="file"], #global-tooltip, .badge { display: none !important; }
+      .panel { background: var(--panel); border: 1px solid var(--border); box-shadow: none; break-inside: avoid; }
+      table { min-width: auto; width: auto; }
+      th { position: static; background: #f8fafc; color: #0f172a; border-bottom: 2px solid var(--border); }
+      td { color: #0f172a; }
+      .metric { background: #ffffff; border: 1px solid var(--border); box-shadow: none; break-inside: avoid; }
+      .footer { color: var(--muted); }
+    }
+    </style>
 </head>
 <body>
   <div class="wrap">
@@ -72,6 +117,7 @@
         <div class="actions" style="margin-top:14px">
           <label class="btn" for="fileInput">Carregar JSON</label>
           <button class="btn" id="reloadData">Recarregar</button>
+          <button class="btn" id="exportPdf">Exportar PDF</button>
         </div>
         <input id="fileInput" type="file" accept="application/json" />
       </div>
@@ -80,7 +126,7 @@
     <div class="metrics" id="metrics"></div>
 
     <section class="panel">
-      <h2>Performance</h2>
+      <h2 data-tip="Velocidade de geração de texto medida em tokens por segundo, por categoria.">Performance</h2>
       <div class="table-wrap">
         <table id="simpleTable">
           <thead></thead>
@@ -90,7 +136,7 @@
     </section>
 
     <section class="panel">
-      <h2>Qualidade</h2>
+      <h2 data-tip="Avaliação de qualidade das respostas: sucesso, nota final e classificação.">Qualidade</h2>
       <div class="table-wrap">
         <table id="qualityTable">
           <thead></thead>
@@ -100,7 +146,7 @@
     </section>
 
     <section class="panel">
-      <h2>Consistência</h2>
+      <h2 data-tip="Estabilidade e repetibilidade: variância, mínimo, máximo e tempo médio.">Consistência</h2>
       <div class="table-wrap">
       <table id="advancedTable">
         <thead></thead>
@@ -110,7 +156,7 @@
     </section>
 
     <section class="panel">
-      <h2>Recursos</h2>
+      <h2 data-tip="Tamanho do modelo, memória consumida e limites de contexto.">Recursos</h2>
       <div class="table-wrap">
       <table id="modelsTable">
         <thead></thead>
@@ -120,6 +166,7 @@
     </section>
 
     <p class="footer" id="status">Nenhum arquivo carregado ainda.</p>
+    <div id="global-tooltip"></div>
   </div>
 
   <script id="dashboard-data" type="application/json">
@@ -140,16 +187,38 @@
       return [...models].sort((a, b) => {
         let av = a[sortKey];
         let bv = b[sortKey];
-        if (sortKey === "media") {
-          const aCats = a.categories ?? {};
-          const bCats = b.categories ?? {};
-          const aVals = ["coding", "extraction", "instruction", "reasoning"].map((c) => Number(aCats[c]?.avg_tokens_per_second ?? 0));
-          const bVals = ["coding", "extraction", "instruction", "reasoning"].map((c) => Number(bCats[c]?.avg_tokens_per_second ?? 0));
-          av = aVals.reduce((sum, value) => sum + value, 0) / (aVals.length || 1);
-          bv = bVals.reduce((sum, value) => sum + value, 0) / (bVals.length || 1);
+        if (sortKey === 'coding' || sortKey === 'extraction' || sortKey === 'instruction' || sortKey === 'reasoning') {
+          const aCat = (a.categories ?? {})[sortKey] ?? {};
+          const bCat = (b.categories ?? {})[sortKey] ?? {};
+          av = typeof aCat.avg_tokens_per_second === 'number' ? aCat.avg_tokens_per_second : 0;
+          bv = typeof bCat.avg_tokens_per_second === 'number' ? bCat.avg_tokens_per_second : 0;
+        } else if (sortKey === 'media') {
+          const aCats = (a.categories ?? {});
+          const bCats = (b.categories ?? {});
+          const aVals = ['coding','extraction','instruction','reasoning'].map((c) => Number((aCats[c] ?? {}).avg_tokens_per_second ?? 0));
+          const bVals = ['coding','extraction','instruction','reasoning'].map((c) => Number((bCats[c] ?? {}).avg_tokens_per_second ?? 0));
+          av = aVals.reduce((s, v) => s + v, 0) / (aVals.length || 1);
+          bv = bVals.reduce((s, v) => s + v, 0) / (bVals.length || 1);
         }
-        const diff = typeof av === "string" ? av.localeCompare(bv) : (av ?? 0) - (bv ?? 0);
-        return sortDir === "asc" ? diff : -diff;
+        const diff = typeof av === 'string' ? av.localeCompare(bv) : (av ?? 0) - (bv ?? 0);
+        return sortDir === 'asc' ? diff : -diff;
+      });
+    }
+    function initTooltips(root) {
+      const tip = document.getElementById("global-tooltip");
+      if (!tip) return;
+      (root || document).querySelectorAll("th[data-tip], h2[data-tip]").forEach((el) => {
+        el.addEventListener("mouseenter", () => {
+          tip.textContent = el.dataset.tip || "";
+          tip.style.display = "block";
+        });
+        el.addEventListener("mousemove", (e) => {
+          tip.style.left = e.clientX + "px";
+          tip.style.top = e.clientY + "px";
+        });
+        el.addEventListener("mouseleave", () => {
+          tip.style.display = "none";
+        });
       });
     }
     function evaluateText(score) {
@@ -157,6 +226,33 @@
       if (score >= 7) return "Bom";
       if (score >= 4) return "Regular";
       return "Fraco";
+    }
+    function tooltip(key) {
+      const map = {
+        model: "Nome do arquivo do modelo.",
+        avg_tokens_per_second: "Média de tokens gerados por segundo em todas as categorias.",
+        coding: "Velocidade média gerada nos prompts de codificação ou edição de código.",
+        extraction: "Velocidade média gerada nos prompts de extração de dados estruturados.",
+        instruction: "Velocidade média gerada nos prompts de instrução direta.",
+        reasoning: "Velocidade média gerada nos prompts que exigem raciocínio passo a passo.",
+        prompts_tested: "Quantidade total de prompts avaliados.",
+        successful_prompts: "Quantidade de prompts que foram finalizados sem erro.",
+        success_rate: "Percentual de prompts bem-sucedidos em relação ao total testado.",
+        final_score: "Nota final média do modelo, combinando métricas de qualidade.",
+        evaluation: "Classificação interpretada a partir do final score.",
+        variance: "Variação da velocidade do modelo. Quanto menor, mais previsível.",
+        min_tokens_per_second: "Menor velocidade registrada em um prompt.",
+        max_tokens_per_second: "Maior velocidade registrada em um prompt.",
+        avg_elapsed_seconds: "Tempo médio de execução por prompt em segundos.",
+        avg_tokens_generated: "Quantidade média de tokens gerados por prompt.",
+        model_size_gib: "Tamanho aproximado do arquivo do modelo em GiB.",
+        estimated_kv_cache_gib: "Uso estimado do cache KV em GiB para o contexto atual.",
+        estimated_loaded_gib: "Uso total estimado na GPU (modelo + cache KV).",
+        context_size: "Tamanho de contexto configurado no servidor.",
+        server_ctx_train: "Tamanho máximo de contexto suportado na inicialização do servidor.",
+        media: "Média simples das velocidades das categorias."
+      };
+      return map[key] ?? key;
     }
     function buildSimpleRow(model) {
       const modelCats = model.categories ?? {};
@@ -189,10 +285,10 @@
       ];
     }
     function render(data) {
-      state.data = data;
-      const models = sortModels(data.models ?? []);
-      el("status").textContent = `Carregado: ${models.length} modelos e ${(data.categories ?? []).length} categorias.`;
-      el("metrics").innerHTML = aggregateMetrics(data).map((m) => `
+      state.data = typeof data === "string" ? JSON.parse(data) : data;
+      const models = sortModels(state.data.models ?? []);
+      el("status").textContent = `Carregado: ${models.length} modelos e ${(state.data.categories ?? []).length} categorias.`;
+      el("metrics").innerHTML = aggregateMetrics(state.data).map((m) => `
         <div class="metric"><div class="label">${m.label}</div><div class="value">${m.value}</div><div class="detail">${m.detail}</div></div>
       `).join("");
       const categories = ["coding", "extraction", "instruction", "reasoning"];
@@ -201,12 +297,12 @@
         { key: "avg_tokens_per_second", label: "Avg tok/s" },
       ];
       categories.forEach((cat) => performanceColumns.push({ key: cat, label: cat }));
-      el("simpleTable").querySelector("thead").innerHTML = `<tr>${performanceColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el("simpleTable").querySelector("thead").innerHTML = `<tr>${performanceColumns.map((c) => `<th data-tip="${tooltip(c.key)}" data-key="${c.key}">${c.label}<span class="sort-icon ${state.sortKey === c.key ? (state.sortDir === "asc" ? "up" : "down") : ""}"></span></th>`).join("")}</tr>`;
       const performanceRows = models.map((m) => {
         const catVals = categories.map((c) => Number((m.categories ?? {})[c]?.avg_tokens_per_second ?? 0));
         const collected = catVals.filter((n) => Number.isFinite(n));
         const avgPerformance = collected.length ? collected.reduce((sum, value) => sum + value, 0) / collected.length : 0;
-        return { model: m.model, avg_tokens_per_second: m.avg_tokens_per_second ?? 0, ...Object.fromEntries(categories.map((c, idx) => [c, catVals[idx]])) };
+        return { model: m.model, avg_tokens_per_second: m.avg_tokens_per_second ?? 0, ...Object.fromEntries(categories.map((c, idx) => [c, catVals[idx]])), media: avgPerformance };
       });
       el("simpleTable").querySelector("tbody").innerHTML = performanceRows.map((row) => `
         <tr>
@@ -221,7 +317,7 @@
           if (key === "model") return;
           if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
           else { state.sortKey = key; state.sortDir = "desc"; }
-          render(data);
+          render(state.data);
         };
       });
       const qualityColumns = [
@@ -232,7 +328,7 @@
         { key: "final_score", label: "Final" },
         { key: "evaluation", label: "Avaliação" },
       ];
-      el("qualityTable").querySelector("thead").innerHTML = `<tr>${qualityColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el("qualityTable").querySelector("thead").innerHTML = `<tr>${qualityColumns.map((c) => `<th data-tip="${tooltip(c.key)}" data-key="${c.key}">${c.label}<span class="sort-icon ${state.sortKey === c.key ? (state.sortDir === "asc" ? "up" : "down") : ""}"></span></th>`).join("")}</tr>`;
       el("qualityTable").querySelector("tbody").innerHTML = models.map((m) => {
         const score = m.scores ?? {};
         return `<tr>
@@ -250,7 +346,7 @@
           if (key === "model" || key === "evaluation") return;
           if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
           else { state.sortKey = key; state.sortDir = "desc"; }
-          render(data);
+          render(state.data);
         };
       });
       const consistencyColumns = [
@@ -261,7 +357,7 @@
         { key: 'avg_elapsed_seconds', label: 'Avg elapsed s' },
         { key: 'avg_tokens_generated', label: 'Avg tokens' },
       ];
-      el('advancedTable').querySelector('thead').innerHTML = `<tr>${consistencyColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el('advancedTable').querySelector('thead').innerHTML = `<tr>${consistencyColumns.map((c) => `<th data-tip="${tooltip(c.key)}" data-key="${c.key}">${c.label}<span class="sort-icon ${state.sortKey === c.key ? (state.sortDir === 'asc' ? 'up' : 'down') : ''}"></span></th>`).join("")}</tr>`;
       el('advancedTable').querySelector('tbody').innerHTML = models.map((m) => {
         return `<tr>
           <td>${m.model}</td>
@@ -270,15 +366,15 @@
           <td>${fmt1.format(m.max_tokens_per_second ?? 0)}</td>
           <td>${fmt1.format(m.avg_elapsed_seconds ?? 0)}</td>
           <td>${fmt1.format(m.avg_tokens_generated ?? 0)}</td>
-        </tr>`;
-      }).join("");
+        </tr>
+      `}).join("");
       el('advancedTable').querySelectorAll('th').forEach((th) => {
         th.onclick = () => {
           const key = th.dataset.key;
           if (key === 'model') return;
           if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
           else { state.sortKey = key; state.sortDir = 'desc'; }
-          render(data);
+          render(state.data);
         };
       });
 
@@ -290,7 +386,7 @@
         { key: 'context_size', label: 'Ctx' },
         { key: 'server_ctx_train', label: 'Ctx train' },
       ];
-      el('modelsTable').querySelector('thead').innerHTML = `<tr>${resourceColumns.map((c) => `<th data-key="${c.key}">${c.label}</th>`).join("")}</tr>`;
+      el('modelsTable').querySelector('thead').innerHTML = `<tr>${resourceColumns.map((c) => `<th data-tip="${tooltip(c.key)}" data-key="${c.key}">${c.label}<span class="sort-icon ${state.sortKey === c.key ? (state.sortDir === 'asc' ? 'up' : 'down') : ''}"></span></th>`).join("")}</tr>`;
       el('modelsTable').querySelector('tbody').innerHTML = models.map((m) => `
         <tr>
           <td>${m.model}</td>
@@ -307,9 +403,10 @@
           if (key === 'model') return;
           if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
           else { state.sortKey = key; state.sortDir = 'desc'; }
-          render(data);
+          render(state.data);
         };
       });
+      initTooltips(document);
     }
     async function loadJson(text) { render(JSON.parse(text)); }
     el("fileInput").addEventListener("change", async (e) => {
@@ -364,6 +461,9 @@
       }
     }
     el("reloadData").addEventListener("click", loadDefault);
+    el("exportPdf").addEventListener("click", () => {
+      window.print();
+    });
     window.addEventListener("DOMContentLoaded", async () => {
       try { await loadDefault(); }
       catch { el("status").textContent = "Não consegui carregar automaticamente. Use o botão Carregar JSON."; }
