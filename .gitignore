@@ -17,3 +17,7 @@ reports/*
 !reports/server-logs/
 reports/server-logs/*
 !reports/server-logs/.gitkeep
+
+# Arquivos gerados pelo dashboard
+Benchmark Dashboard.pdf
+IDEA.md

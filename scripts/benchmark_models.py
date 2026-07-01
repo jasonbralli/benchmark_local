@@ -87,8 +87,8 @@ def prompt_category(prompt_id: str) -> str:
 def clean_response(text: str) -> str:
     if not text:
         return text
-    # Remove reasoning blocks like </think>
-    cleaned = re.sub(r'', '', text, flags=re.DOTALL)
+    # Remove reasoning blocks like <think>...</think>
+    cleaned = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
     # Try to extract the last markdown code block if present
     code_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)```', cleaned)
     if code_blocks:
