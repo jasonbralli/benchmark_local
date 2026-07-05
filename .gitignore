@@ -21,3 +21,8 @@ reports/server-logs/*
 # Arquivos gerados pelo dashboard
 Benchmark Dashboard.pdf
 IDEA.md
+
+# Arquivos temporários e backups
+*.bak
+.worktrees/
+.pytest_cache/

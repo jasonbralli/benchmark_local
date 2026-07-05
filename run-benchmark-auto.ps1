@@ -59,6 +59,21 @@ Write-Host "Modelos: $MODELS" -ForegroundColor Gray
 Write-Host "Saída: $OUT" -ForegroundColor Gray
 Write-Host ""
 
+# Verify Python 3 is available
+$pyVer = python --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "" -ForegroundColor Red
+    Write-Host "❌ Python não foi encontrado. Instale Python 3 e tente novamente." -ForegroundColor Red
+    exit 1
+}
+$major = [int]($pyVer -replace '[^0-9.]', '' -split '\.' | Select-Object -First 1)
+if ($major -lt 3) {
+    Write-Host "" -ForegroundColor Red
+    Write-Host "❌ Python versão $pyVer detectada. Python 3+ é necessário." -ForegroundColor Red
+    exit 1
+}
+Write-Host "Python: $pyVer" -ForegroundColor Gray
+
 python $BENCHMARK `
     $MODELS `
     --recursive `
@@ -68,11 +83,11 @@ python $BENCHMARK `
     --warmup-timeout 180 `
     --warmup-n-predict 12 `
     --warmup-prompt "Responda apenas com OK." `
-    --ctx-size 64512 `
+    --ctx-size 65536 `
     --kv-cache-bytes-per-token 32768 `
     --server-log-dir (Join-Path $ROOT "reports\server-logs") `
     --output $OUT `
-    --n-predict 128 `
+    --n-predict 2048 `
     --temperature 0.6 `
     --top-p 0.95 `
     --repeat-penalty 1.1 `

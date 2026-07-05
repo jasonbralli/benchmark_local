@@ -13,6 +13,34 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, asdict
 from enum import Enum
 import statistics
+from pathlib import Path
+
+# ── Config loading ──────────────────────────────────────────────
+_CONFIG_PATH = Path(__file__).resolve().parent / "scoring_config.json"
+_DEFAULT_LANG = "pt"
+
+
+def _load_config() -> dict:
+    if _CONFIG_PATH.exists():
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    # Fallback defaults (mirrors scoring_config.json)
+    return {
+        "evaluation_thresholds": {"excellent": 8.5, "good": 7.0, "acceptable": 5.0},
+        "pass_threshold": 7.0,
+        "category_weights": {"coding": 0.40, "extraction": 0.30, "instruction": 0.20, "reasoning": 0.10},
+        "scorer_weights": {
+            "coding": {"syntax": 0.25, "logic": 0.25, "efficiency": 0.15, "error_handling": 0.15, "clarity": 0.20},
+            "extraction": {"completeness": 0.25, "accuracy": 0.25, "format": 0.20, "structure": 0.20, "no_hallucinations": 0.10},
+            "instruction": {"constraint_compliance": 0.25, "clarity": 0.20, "relevance": 0.20, "creativity": 0.15, "writing_quality": 0.20},
+            "reasoning": {"correct_answer": 0.30, "explanation": 0.25, "reasoning_clarity": 0.20, "step_justification": 0.15, "complexity_handling": 0.10},
+        },
+        "language_patterns": {},
+    }
+
+
+CONFIG = _load_config()
+LANG_PATTERNS = CONFIG.get("language_patterns", {}).get(_DEFAULT_LANG, {})
 
 
 class Category(Enum):
@@ -62,7 +90,7 @@ class CodingScorer:
         try:
             ast.parse(code)
             return 10.0  # Válido
-        except SyntaxError:
+        except SyntaxError as first_exc:
             # Tenta extrair bloco de código markdown, se houver
             code_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)```', response)
             if code_blocks:
@@ -80,8 +108,8 @@ class CodingScorer:
                         return 2.0  # Vários erros
                 except Exception:
                     return 0.0
-            # Sem code block ou parse direto falhou
-            lines_with_issues = len(str(sys.exc_info()[1]).split('\n'))
+            # Sem code block — usa a primeira exceção salva
+            lines_with_issues = len(str(first_exc).split('\n'))
             if lines_with_issues <= 1:
                 return 7.0
             elif lines_with_issues <= 3:
@@ -159,10 +187,13 @@ class CodingScorer:
         """Avalia clareza do código"""
         score = 5.0
         
-        # Variáveis com nome descritivo
-        var_pattern = r'\b[a-z_]{3,}\b'
+        # Variáveis com nome descritivo — improved pattern targeting snake_case identifiers
+        # Match identifiers that look like descriptive variable names (e.g. user_name, total_count)
+        var_pattern = r'\b[a-z][a-z0-9]_[a-z][a-z0-9]+\b'
         good_vars = len(re.findall(var_pattern, response))
-        if good_vars > 5:
+        # Also count reasonably long descriptive names (no underscore)
+        long_vars = len(re.findall(r'\b[a-z]{5,}\b', response))
+        if good_vars + long_vars > 5:
             score += 2.0
         
         # Presença de comentários
@@ -287,11 +318,11 @@ class ExtractionScorer:
     @staticmethod
     def score_no_hallucinations(response: str) -> float:
         """Detecta dados inventados/alucinações"""
-        # Sinais de alucinação
-        hallucination_patterns = [
+        # Sinais de alucinação — language-aware
+        hallucination_patterns = LANG_PATTERNS.get("hallucination_patterns", [
             r'\[.*\]\s*\(fake.*\)',  # Dados marcados como fake
             r'(sem informações|não encontrado|desconhecido)',
-        ]
+        ])
         
         score = 10.0
         for pattern in hallucination_patterns:
@@ -299,16 +330,63 @@ class ExtractionScorer:
                 score -= 3.0
         
         return max(score, 0.0)
-    
+
+    @staticmethod
+    def score_accuracy(response: str, expected_answer: Optional[str] = None) -> float:
+        """Compara de fato com o gabarito (expected_answer), quando disponível"""
+        if not expected_answer:
+            return 7.0  # Sem gabarito, não dá pra validar - nota neutra
+
+        # Tenta parsear ambos como JSON e comparar campo a campo
+        try:
+            expected = json.loads(expected_answer)
+        except Exception:
+            expected = None
+
+        try:
+            actual = json.loads(response)
+        except Exception:
+            actual = None
+
+        if isinstance(expected, dict) and isinstance(actual, dict):
+            if not expected:
+                return 7.0
+
+            def _norm(v):
+                return re.sub(r'\s+', ' ', str(v)).strip().lower()
+
+            def _match(expected_val, actual_val) -> bool:
+                if isinstance(expected_val, list) and isinstance(actual_val, list):
+                    exp_norm = {_norm(x) for x in expected_val}
+                    act_norm = {_norm(x) for x in actual_val}
+                    if not exp_norm:
+                        return True
+                    overlap = len(exp_norm & act_norm) / len(exp_norm)
+                    return overlap >= 0.6
+                return _norm(expected_val) == _norm(actual_val)
+
+            matches = sum(
+                1 for k, v in expected.items()
+                if k in actual and _match(v, actual[k])
+            )
+            return (matches / len(expected)) * 10.0
+
+        # Não deu pra parsear como JSON estruturado - cai pra comparação textual solta
+        exp_norm = re.sub(r'\s+', ' ', expected_answer).strip().lower()
+        resp_norm = re.sub(r'\s+', ' ', response).strip().lower()
+        if exp_norm in resp_norm:
+            return 8.0
+        return 2.0  # Não achou nada do gabarito na resposta
+
     @classmethod
-    def score(cls, response: str, expected_fields: int = 3) -> Tuple[float, Dict]:
+    def score(cls, response: str, expected_fields: int = 3, expected_answer: Optional[str] = None) -> Tuple[float, Dict]:
         """Score final para extração"""
         if not response or len(response) < 5:
             return 0.0, {}
         
         scores = {
             'completeness': cls.score_completeness(response, expected_fields),
-            'accuracy': min(cls.score_completeness(response) + 1, 10),  # Proxy
+            'accuracy': cls.score_accuracy(response, expected_answer),
             'format': cls.score_format(response),
             'structure': cls.score_structure(response),
             'no_hallucinations': cls.score_no_hallucinations(response),
@@ -330,7 +408,7 @@ class InstructionScorer:
     }
     
     @staticmethod
-    def score_constraint_compliance(response: str, constraints: List[Dict] = None) -> float:
+    def score_constraint_compliance(response: str, constraints: Optional[List[Dict]] = None) -> float:
         """Verifica se restrições foram atendidas"""
         if not constraints:
             return 10.0
@@ -382,7 +460,7 @@ class InstructionScorer:
         return min(score, 10.0)
     
     @staticmethod
-    def score_relevance(response: str, topic_keywords: List[str] = None) -> float:
+    def score_relevance(response: str, topic_keywords: Optional[List[str]] = None) -> float:
         """Avalia relevância ao tema"""
         score = 8.0
         
@@ -401,19 +479,19 @@ class InstructionScorer:
         """Avalia criatividade/originalidade"""
         score = 5.0
         
-        # Uso de metáforas, expressões coloridas
-        creative_patterns = [
+        # Uso de metáforas, expressões coloridas — language-aware patterns
+        creative_pats = LANG_PATTERNS.get("creative_patterns", [
             r'(como|semelhante a|parece)',
             r'(inteligente|astuto|criativo)',
-            r"""['"]""",
-        ]
+        ])
         
-        for pattern in creative_patterns:
+        for pattern in creative_pats:
             if re.search(pattern, response, re.IGNORECASE):
                 score += 1.0
         
-        # Penalidade por resposta muito genérica
-        if response.lower().count('é') > 5 and len(response) < 200:
+        # Penalidade por resposta muito genérica — language-aware
+        penalty_word = LANG_PATTERNS.get("creativity_penalty_word", "é")
+        if response.lower().count(penalty_word) > 5 and len(response) < 200:
             score -= 1.0
         
         return min(score, 10.0)
@@ -433,7 +511,12 @@ class InstructionScorer:
         return max(min(score, 10.0), 3.0)
     
     @classmethod
-    def score(cls, response: str, constraints: List[Dict] = None) -> Tuple[float, Dict]:
+    def score(
+        cls,
+        response: str,
+        constraints: Optional[List[Dict]] = None,
+        topic_keywords: Optional[List[str]] = None,
+    ) -> Tuple[float, Dict]:
         """Score final para instrução"""
         if not response or len(response) < 10:
             return 0.0, {}
@@ -441,7 +524,7 @@ class InstructionScorer:
         scores = {
             'constraint_compliance': cls.score_constraint_compliance(response, constraints),
             'clarity': cls.score_clarity(response),
-            'relevance': cls.score_relevance(response),
+            'relevance': cls.score_relevance(response, topic_keywords),
             'creativity': cls.score_creativity(response),
             'writing_quality': cls.score_writing_quality(response),
         }
@@ -462,7 +545,7 @@ class ReasoningScorer:
     }
     
     @staticmethod
-    def score_correct_answer(response: str, expected_answer: str = None) -> float:
+    def score_correct_answer(response: str, expected_answer: Optional[str] = None) -> float:
         """Verifica se resposta final está correta"""
         if not expected_answer:
             return 5.0  # Sem referência
@@ -492,12 +575,12 @@ class ReasoningScorer:
         """Avalia se há explicação clara"""
         score = 3.0
         
-        # Termos de explicação
-        explanation_terms = [
+        # Termos de explicação — language-aware
+        explanation_terms = LANG_PATTERNS.get("explanation_terms", [
             'porque', 'pois', 'uma vez que', 'já que',
             'portanto', 'logo', 'então', 'assim',
             'observe que', 'note que',
-        ]
+        ])
         
         term_count = sum(1 for term in explanation_terms if term in response.lower())
         if term_count > 0:
@@ -541,8 +624,10 @@ class ReasoningScorer:
         """Avalia se cada passo está justificado"""
         score = 3.0
         
-        # Presença de porque/motivos
-        justify_terms = ['porque', 'pois', 'uma vez que', 'já que', 'dado que']
+        # Presença de porque/motivos — language-aware
+        justify_terms = LANG_PATTERNS.get("justify_terms", [
+            'porque', 'pois', 'uma vez que', 'já que', 'dado que'
+        ])
         justify_count = sum(response.lower().count(term) for term in justify_terms)
         
         score += min(justify_count * 1.5, 6.0)
@@ -558,14 +643,16 @@ class ReasoningScorer:
         if re.search(r'(probabilidade|combinação|permutação|equação|sistema)', response, re.IGNORECASE):
             score += 2.0
         
-        # Número de variáveis/elementos mencionados
-        if response.count('e') > 10:  # Simples heurística
+        # Número de variáveis/elementos mencionados — count unique identifiers instead of letter frequency
+        identifiers = re.findall(r'\b[a-zA-Z_]\w+\b', response)
+        unique_ids = len(set(identifiers))
+        if unique_ids > 10:
             score += 1.0
         
         return min(score, 10.0)
     
     @classmethod
-    def score(cls, response: str, expected_answer: str = None) -> Tuple[float, Dict]:
+    def score(cls, response: str, expected_answer: Optional[str] = None) -> Tuple[float, Dict]:
         """Score final para raciocínio"""
         if not response or len(response) < 20:
             return 0.0, {}
@@ -605,8 +692,9 @@ class BenchmarkEvaluator:
         response: str,
         prompt_id: str,
         category: Category,
-        constraints: List[Dict] = None,
-        expected_answer: str = None,
+        constraints: Optional[List[Dict]] = None,
+        expected_answer: Optional[str] = None,
+        expected_elements: Optional[List[str]] = None,
     ) -> ScoreBreakdown:
         """Avalia uma resposta individual"""
         
@@ -623,9 +711,11 @@ class BenchmarkEvaluator:
         
         # Score específico por categoria
         if category == Category.INSTRUCTION:
-            final_score, criterion_scores = scorer.score(response, constraints)
+            final_score, criterion_scores = scorer.score(response, constraints, expected_elements)
         elif category == Category.REASONING:
             final_score, criterion_scores = scorer.score(response, expected_answer)
+        elif category == Category.EXTRACTION:
+            final_score, criterion_scores = scorer.score(response, expected_answer=expected_answer)
         else:
             final_score, criterion_scores = scorer.score(response)
         
@@ -664,6 +754,7 @@ class BenchmarkEvaluator:
             
             constraints = prompt_info.get('constraints', None)
             expected_answer = prompt_info.get('expected_answer', None)
+            expected_elements = prompt_info.get('expected_elements', None)
             
             result = cls.evaluate_response(
                 response=response,
@@ -671,6 +762,7 @@ class BenchmarkEvaluator:
                 category=category,
                 constraints=constraints,
                 expected_answer=expected_answer,
+                expected_elements=expected_elements,
             )
             
             detailed_results.append(result)

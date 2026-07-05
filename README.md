@@ -51,6 +51,22 @@ O script:
 - Avalia as respostas com scoring automatizado
 - Gera os relatórios
 
+### 4. Reavaliar sem reexecutar (`rescore.py`)
+
+```bash
+python3 scripts/rescore.py
+```
+
+Recalcula os scores de avaliação usando os prompts e respostas já existentes em `reports/benchmark_results.csv`, sem precisar reexecutar o benchmark completo. Útil para testar mudanças na rubrica de scoring.
+
+### 5. Rodar os testes
+
+```bash
+python3 -m pytest scripts/test_benchmark.py -v
+```
+
+51 testes cobrem todos os scorers, a orquestração do `BenchmarkEvaluator`, limpeza de respostas e consistência de thresholds.
+
 ## Saídas geradas
 
 ```

@@ -1,0 +1,88 @@
+{
+  "evaluation_thresholds": {
+    "excellent": 8.5,
+    "good": 7.0,
+    "acceptable": 5.0
+  },
+  "pass_threshold": 7.0,
+  "category_weights": {
+    "coding": 0.40,
+    "extraction": 0.30,
+    "instruction": 0.20,
+    "reasoning": 0.10
+  },
+  "scorer_weights": {
+    "coding": {
+      "syntax": 0.25,
+      "logic": 0.25,
+      "efficiency": 0.15,
+      "error_handling": 0.15,
+      "clarity": 0.20
+    },
+    "extraction": {
+      "completeness": 0.25,
+      "accuracy": 0.25,
+      "format": 0.20,
+      "structure": 0.20,
+      "no_hallucinations": 0.10
+    },
+    "instruction": {
+      "constraint_compliance": 0.25,
+      "clarity": 0.20,
+      "relevance": 0.20,
+      "creativity": 0.15,
+      "writing_quality": 0.20
+    },
+    "reasoning": {
+      "correct_answer": 0.30,
+      "explanation": 0.25,
+      "reasoning_clarity": 0.20,
+      "step_justification": 0.15,
+      "complexity_handling": 0.10
+    }
+  },
+  "language_patterns": {
+    "pt": {
+      "explanation_terms": [
+        "porque", "pois", "uma vez que", "já que",
+        "portanto", "logo", "então", "assim",
+        "observe que", "note que"
+      ],
+      "step_patterns": [
+        "passo", "primeiro", "segundo", "terceiro",
+        "quarto", "quinto", "finalmente", "por último"
+      ],
+      "justify_terms": ["porque", "pois", "uma vez que", "já que", "dado que"],
+      "creativity_penalty_word": "é",
+      "creative_patterns": [
+        "(como|semelhante a|parece)",
+        "(inteligente|astuto|criativo)"
+      ],
+      "hallucination_patterns": [
+        "\\[.*\\]\\s*\\(fake.*\\)",
+        "(sem informações|não encontrado|desconhecido)"
+      ]
+    },
+    "en": {
+      "explanation_terms": [
+        "because", "since", "as", "therefore",
+        "thus", "so", "hence", "consequently",
+        "note that", "observe that", "it follows that"
+      ],
+      "step_patterns": [
+        "step", "first", "second", "third",
+        "fourth", "fifth", "finally", "lastly"
+      ],
+      "justify_terms": ["because", "since", "as", "given that", "due to"],
+      "creativity_penalty_word": "is",
+      "creative_patterns": [
+        "(like|similar to|resembles|compared to)",
+        "(clever|ingenious|creative|innovative)"
+      ],
+      "hallucination_patterns": [
+        "\\[.*\\]\\s*\\(fake.*\\)",
+        "(no information|not found|unknown)"
+      ]
+    }
+  }
+}

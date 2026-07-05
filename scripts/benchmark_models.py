@@ -77,20 +77,19 @@ def load_prompts(path: Path | None) -> list[dict]:
         )
     return prompts
 
-
 def prompt_category(prompt_id: str) -> str:
     if "_" in prompt_id:
         return prompt_id.split("_", 1)[0]
     return "misc"
 
-
 def clean_response(text: str) -> str:
     if not text:
         return text
-    # Remove reasoning blocks like <think>...</think>
-    cleaned = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    if '<think>' in text and '</think>' not in text:
+        return ""  # resposta incompleta — não avaliar como se fosse válida
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     # Try to extract the last markdown code block if present
-    code_blocks = re.findall(r'```(?:python)?\s*([\s\S]*?)```', cleaned)
+    code_blocks = re.findall(r'```(?:\w+)?\s*([\s\S]*?)```', cleaned)
     if code_blocks:
         cleaned = '\n'.join(code_blocks)
     # Strip excessive blank lines and whitespace
@@ -144,7 +143,9 @@ def run_prompt(command: str, timeout: int | None) -> tuple[int, str, str, float]
         return completed.returncode, completed.stdout.strip(), completed.stderr.strip(), elapsed
     except subprocess.TimeoutExpired as exc:
         elapsed = time.perf_counter() - start
-        return 124, (exc.stdout or "").strip(), (exc.stderr or "timeout").strip(), elapsed
+        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout.decode("utf-8", errors="replace") if exc.stdout else "")
+        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr.decode("utf-8", errors="replace") if exc.stderr else "timeout")
+        return 124, stdout.strip(), stderr.strip(), elapsed
 
 
 def _post_json(url: str, payload: dict[str, object], timeout: int | None) -> tuple[int, str, str, float]:
@@ -877,14 +878,7 @@ def main() -> int:
                 )
                 flush_log(server_proc)
 
-            log_metrics = parse_server_log_metrics(server_proc.log_path) if server_proc is not None else {
-                "server_ctx_seq": args.ctx_size,
-                "server_ctx_train": 0,
-                "observed_state_size_bytes": 0,
-            }
-            if server_proc is not None:
-                flush_log(server_proc)
-                log_metrics = parse_server_log_metrics(server_proc.log_path)
+            log_metrics = parse_server_log_metrics(server_proc.log_path) if server_proc is not None else {}
 
             for prompt in prompts:
                 print(f"- {prompt['id']}: executando...")
@@ -905,7 +899,12 @@ def main() -> int:
                     print(f"  comando: {command}")
                     return_code, stdout, stderr, elapsed = run_prompt(command, args.timeout)
                     response_body = stdout
-                    tokens_generated = len(stdout.split()) if stdout else 0
+                    # Try to extract actual token count from llama-cli stdout ("decoded N tokens")
+                    tok_match = re.search(r'decoded\s+(\d+)\s+tokens', stdout)
+                    if tok_match:
+                        tokens_generated = int(tok_match.group(1))
+                    else:
+                        tokens_generated = len(stdout.split()) if stdout else 0
 
                 tokens_per_second = (tokens_generated / elapsed) if elapsed > 0 else 0.0
                 estimated_context_bytes = (log_metrics["server_ctx_seq"] or args.ctx_size) * args.kv_cache_bytes_per_token

@@ -147,7 +147,7 @@
   {
     "id": "reasoning_1",
     "category": "reasoning",
-    "prompt": "Cinco carros estão em uma corrida. O carro A terminou antes do B. O carro C terminou depois do D. O carro D terminou antes do A. O carro E terminou em último lugar. Qual foi a ordem exata de chegada do primeiro ao quinto lugar? Mostre passo-a-passo sua lógica.",
+    "prompt": "Cinco carros estão em uma corrida. O carro A terminou antes do B. O carro D terminou antes do C. O carro D terminou antes do A. O carro A terminou antes do C. O carro C terminou antes do B. O carro E terminou em último lugar. Qual foi a ordem exata de chegada do primeiro ao quinto lugar? Mostre passo-a-passo sua lógica.",
     "expected_elements": ["D", "E", "último"],
     "expected_answer": "D, A, C, B, E",
     "constraints": null
