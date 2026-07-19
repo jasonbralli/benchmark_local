@@ -146,7 +146,51 @@ O benchmark avalia modelos em 4 categorias com pesos diferentes:
 - 🟠 **Aceitável** (≥5.0)
 - 🔴 **Fraco** (<5.0)
 
-## Melhorias Futuras
+### Métricas e Fórmulas
+
+#### Tokens por Segundo (TPS)
+
+- **Avg tok/s**: Média aritmética simples de `tokens_generated / elapsed_seconds` em todas as categorias.
+- **Avg tok/s Weighted**: Média ponderada por tempo — soma dos tokens gerados multiplicados pelo tempo de execução, dividido pela soma dos tempos. Mais fiel ao uso real: um prompt que demora mais contribui mais para a média.
+- **Media**: Média simples entre as 4 categorias (coding, extraction, instruction, reasoning).
+
+#### Timeout
+
+- Quando o modelo atinge o limite de espera (`max_wait = 120s`), o registro é marcado como `timeout: True`.
+- No CSV: coluna `timeout` (verdadeiro/falso) e `timeout_count` (quantidade de timeouts por modelo).
+- No dashboard: badge vermelho na tabela Performance se o modelo teve qualquer timeout.
+
+#### Sucesso vs Qualidade
+
+- **successful_prompts** no dashboard = prompts com `return_code == 0` (execução completa sem erro).
+- **final_score** = avaliação de qualidade (score ≥ 7.0 → "Bom" ou melhor). São métricas diferentes!
+
+### Tratamento de Erros
+
+O benchmark captura e registra automaticamente:
+- **Timeout** — modelo excede `max_wait` (120s). `elapsed_seconds = timeout`, sem tokens gerados.
+- **Truncated output** — modelo produz menos tokens que o mínimo configurado.
+- **Erro no servidor** — `return_code != 0`. O registro é salvo mas o modelo pode não ser avaliado.
+- **Erro de leitura** — prompt não encontrado em `prompts.json`. Ignorado com log de aviso.
+
+### Dashboard
+
+O dashboard é um arquivo HTML estático que não depende de servidor HTTP.
+
+### Como usar
+
+1. Abra `index.html` diretamente no navegador
+2. Clique em **"Carregar JSON"** e selecione `reports/benchmark_results.dashboard.json`
+3. Ou use o botão **"Recarregar"** após o carregamento
+
+### Funcionalidades
+
+- **4 blocos de comparação**: Performance, Qualidade, Consistência, Recursos
+- **Ordenação por coluna**: clique no título para ordenar (asc/desc)
+- **Tooltips**: explicações ao passar o mouse sobre cabeçalhos e colunas
+- **Exportar PDF**: usa a impressão nativa do navegador
+- **Indicadores visuais**: setas ▲/▼ mostram a direção da ordenação
+- **Badge de timeout**: aviso vermelho na coluna "Timeout" da tabela Performance
 
 - [ ] Suporte a múltiplos modelos em paralelo
 - [ ] Comparação visual com gráficos de barras

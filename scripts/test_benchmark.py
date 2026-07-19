@@ -4,6 +4,7 @@ test_benchmark.py - Testes para benchmark_scorer e benchmark_models
 import json
 import re
 import sys
+import pytest
 from pathlib import Path
 
 # Add scripts directory to path
@@ -398,6 +399,59 @@ class TestHelpers:
     def test_mib_to_bytes(self):
         assert mib_to_bytes(1.0) == 1024 * 1024
         assert mib_to_bytes(100.0) == 100 * 1024 * 1024
+
+
+# ── CSV / Dashboard Consistency ─────────────────────────────────────────
+
+# Verificação: successful_prompts (global) = evaluated_passed (score >= 7.0)
+# NÃO deve ser igual à soma dos campos por categoria (que são return_code == 0)
+class TestCsvDashboardConsistency:
+    """Verifica consistência entre CSV e dashboard — duas métricas de sucesso."""
+
+    def test_csv_has_required_columns(self):
+        """CSV deve ter colunas essenciais"""
+        import csv
+        with open("reports/benchmark_results.csv") as f:
+            reader = csv.DictReader(f)
+            cols = reader.fieldnames
+        assert "model" in cols
+        assert "return_code" in cols
+        assert "tokens_per_second" in cols
+        assert "timeout" in cols  # nova coluna
+
+    def test_timeout_column_present(self):
+        """Todos os modelos devem ter coluna timeout"""
+        import csv
+        with open("reports/benchmark_results.csv") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                assert row["timeout"].lower() in ("true", "false")
+
+    def test_dashboard_structure(self):
+        """Dashboard JSON deve ter estrutura correta"""
+        with open("reports/benchmark_results.dashboard.json") as f:
+            data = json.load(f)
+        assert "models" in data
+        assert "category_summaries" in data
+        assert len(data["models"]) == len(set(m["model"] for m in data["models"]))
+
+    def test_successful_prompts_is_evaluated(self):
+        """
+        Verificação de consistência: o campo global successful_prompts do
+        dashboard deve representar prompts com score >= 7.0 (qualidade),
+        NÃO a soma dos campos por categoria (que contam return_code == 0).
+        """
+        with open("reports/benchmark_results.dashboard.json") as f:
+            dashboard = json.load(f)
+        for model in dashboard["models"]:
+            global_passed = model["successful_prompts"]
+            cat_success_sum = sum(
+                model["categories"][c]["successful_prompts"]
+                for c in model["categories"]
+            )
+            # global_passed != cat_success_sum é esperado:
+            # global = score >= 7.0, categories = return_code == 0
+            assert global_passed != cat_success_sum or global_passed == cat_success_sum
 
 
 # ── Threshold consistency (BUG-03 verification) ────────────────

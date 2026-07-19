@@ -43,6 +43,7 @@ class BenchmarkResult:
     response_body: str
     output: str
     error: str
+    timeout: bool  # True se elapsed_seconds >= args.timeout
 
 
 @dataclass
@@ -81,6 +82,113 @@ def prompt_category(prompt_id: str) -> str:
     if "_" in prompt_id:
         return prompt_id.split("_", 1)[0]
     return "misc"
+
+SUPPORTED_ARCHITECTURES: set[str] = {
+    "afmoe", "apertus", "arcee", "arctic", "arwkv7", "baichuan", "bailingmoe",
+    "bailingmoe2", "bert", "bitnet", "bloom", "chameleon", "chatglm", "clip",
+    "codeshell", "cogvlm", "cohere2", "cohere2moe", "command_r", "dbrx", "deci",
+    "deepseek", "deepseek2", "deepseek2ocr", "deepseek32", "dots1", "dream",
+    "eagle3", "ernie4.5", "ernie4.5_moe", "eurobert", "exaone", "exaone_moe",
+    "exaone4", "falcon", "falcon_h1", "gemma", "gemma_embedding", "gemma2",
+    "gemma3", "gemma3n", "gemma4", "gemma4_assistant", "glm_dsa", "glm4",
+    "glm4_moe", "gpt2", "gptj", "gptneox", "granite", "granite_hybrid",
+    "granite_moe", "grok", "grovemoe", "hunyuan_dense", "hunyuan_moe",
+    "hunyuan_vl", "internlm2", "jais", "jais2", "jamba", "jina_bert_v2",
+    "jina_bert_v3", "kimi_linear", "lfm2", "lfm2moe", "llada", "llada_moe",
+    "llama", "llama_embed", "llama4", "maincoder", "mamba", "mamba2", "mellum",
+    "mimo2", "minicpm", "minicpm3", "minimax_m2", "mistral3", "mistral4",
+    "modern_bert", "mpt", "nemotron", "nemotron_h", "nemotron_h_moe",
+    "neo_bert", "nomic_bert", "nomic_bert_moe", "olmo", "olmo2", "olmoe",
+    "openai_moe", "openelm", "orion", "paddleocr", "pangu_embed", "phi2",
+    "phi3", "phimoe", "plamo", "plamo2", "plamo3", "plm", "qwen", "qwen2",
+    "qwen2moe", "qwen2vl", "qwen3", "qwen35", "qwen35moe", "qwen3moe",
+    "qwen3next", "qwen3vl", "qwen3vlmoe", "refact", "rnd1", "rwkv6",
+    "rwkv6qwen2", "rwkv7", "seed_oss", "smallthinker", "smollm3", "stablelm",
+    "starcoder", "starcoder2", "step35", "t5", "t5encoder", "talkie",
+    "wavtokenizer_dec", "xverse",
+}
+
+
+NON_LLM_ARCHITECTURES: set[str] = {
+    "clip",        # projetor multimodal, não é LLM standalone
+    "t5",          # encoder-only / multimodal
+    "t5encoder",   # encoder-only
+    "bert",        # encoder-only
+    "modern_bert", # encoder-only
+    "nomic_bert",  # encoder-only
+    "nomic_bert_moe", # encoder-only
+    "neo_bert",    # encoder-only
+    "jina_bert_v2",  # encoder-only
+    "jina_bert_v3",  # encoder-only
+    "eurobert",    # encoder-only
+    "paddleocr",   # OCR
+    "pangu_embed", # embedding
+    "llama_embed", # embedding
+    "gemma_embedding", # embedding
+    "wavtokenizer_dec",  # áudio
+}
+
+
+def get_gguf_architecture(model_path: Path) -> str | None:
+    """Lê a arquitetura de um arquivo GGUF sem carregar o modelo inteiro."""
+    try:
+        with open(model_path, "rb") as f:
+            magic = f.read(4)
+            if magic != b"GGUF":
+                return None
+
+            version = int.from_bytes(f.read(4), "little")
+            _tensor_count = int.from_bytes(f.read(8), "little")
+            kv_count = int.from_bytes(f.read(8), "little")
+
+            for _ in range(kv_count):
+                key_len = int.from_bytes(f.read(8), "little")
+                key = f.read(key_len).decode("utf-8", errors="replace")
+                value_type = int.from_bytes(f.read(4), "little")
+
+                if key == "general.architecture" and value_type == 8:
+                    val_len = int.from_bytes(f.read(8), "little")
+                    return f.read(val_len).decode("utf-8", errors="replace").strip().lower()
+
+                # Pular outros valores
+                if value_type == 8:  # string
+                    val_len = int.from_bytes(f.read(8), "little")
+                    f.read(val_len)
+                elif value_type == 0:  # uint8
+                    f.read(1)
+                elif value_type == 5:  # bool
+                    f.read(1)
+                elif value_type in (2, 10):  # int16, uint32
+                    f.read(2)
+                elif value_type in (3, 4):  # int32, float32
+                    f.read(4)
+                elif value_type in (6, 7, 11):  # int64, float64, uint64
+                    f.read(8)
+                elif value_type == 9:  # array
+                    _arr_type = int.from_bytes(f.read(4), "little")
+                    arr_len = int.from_bytes(f.read(8), "little")
+                    f.read(min(arr_len * 8, 1024 * 1024))  # safety cap
+                else:
+                    break  # formato desconhecido
+    except Exception:
+        return None
+    return None
+
+
+def is_architecture_supported(model_path: Path) -> bool:
+    """Verifica se a arquitetura do modelo GGUF é suportada pelo llama.cpp como LLM."""
+    arch = get_gguf_architecture(model_path)
+    if arch is None:
+        print(f"  ⚠  não foi possível ler a arquitetura de {model_path.name}, pulando...")
+        return False
+    if arch not in SUPPORTED_ARCHITECTURES:
+        print(f"  ⚠  arquitetura '{arch}' não suportada pelo llama.cpp, pulando {model_path.name}")
+        return False
+    if arch in NON_LLM_ARCHITECTURES:
+        print(f"  ⚠  '{arch}' não é um LLM standalone (projetor/encoder/embedding), pulando {model_path.name}")
+        return False
+    return True
+
 
 def clean_response(text: str) -> str:
     if not text:
@@ -444,6 +552,7 @@ def write_results_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
                 "return_code",
                 "output",
                 "error",
+                "timeout",
             ]
         )
         for row in rows:
@@ -468,6 +577,7 @@ def write_results_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
                     row.return_code,
                     row.output,
                     row.error,
+                    row.timeout,
                 ]
             )
 
@@ -485,6 +595,7 @@ def write_summary_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
             "model",
             "prompts_tested",
             "successful_prompts",
+            "timeout_prompts",
             "avg_elapsed_seconds",
             "avg_tokens_generated",
             "avg_tokens_per_second",
@@ -505,15 +616,18 @@ def write_summary_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
         for model, model_rows in grouped.items():
             prompts_tested = len(model_rows)
             successful = sum(1 for row in model_rows if row.return_code == 0)
+            timeout_count = sum(1 for row in model_rows if row.timeout)
             avg_elapsed = sum(row.elapsed_seconds for row in model_rows) / prompts_tested if prompts_tested else 0.0
             avg_tokens = sum(row.tokens_generated for row in model_rows) / prompts_tested if prompts_tested else 0.0
             avg_tps = sum(row.tokens_per_second for row in model_rows) / prompts_tested if prompts_tested else 0.0
             min_tps = min((row.tokens_per_second for row in model_rows), default=0.0)
             max_tps = max((row.tokens_per_second for row in model_rows), default=0.0)
+            timeout_rate = (timeout_count / prompts_tested * 100) if prompts_tested else 0.0
             row_values = [
                 model,
                 prompts_tested,
                 successful,
+                timeout_count,
                 f"{avg_elapsed:.4f}",
                 f"{avg_tokens:.2f}",
                 f"{avg_tps:.4f}",
@@ -524,6 +638,7 @@ def write_summary_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
                 category_rows = [row for row in model_rows if row.category == category]
                 category_total = len(category_rows)
                 category_success = sum(1 for row in category_rows if row.return_code == 0)
+                category_timeout = sum(1 for row in category_rows if row.timeout)
                 category_avg_elapsed = sum(row.elapsed_seconds for row in category_rows) / category_total if category_total else 0.0
                 category_avg_tokens = sum(row.tokens_generated for row in category_rows) / category_total if category_total else 0.0
                 category_avg_tps = sum(row.tokens_per_second for row in category_rows) / category_total if category_total else 0.0
@@ -610,6 +725,8 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
         prompts_tested = len(model_rows)
         successful = sum(1 for row in model_rows if row.return_code == 0)
         avg_tps = sum(row.tokens_per_second for row in model_rows) / prompts_tested if prompts_tested else 0.0
+        weighted_tps = sum(row.tokens_generated * row.elapsed_seconds for row in model_rows) / sum(row.elapsed_seconds for row in model_rows) if any(row.elapsed_seconds > 0 for row in model_rows) else 0.0
+        timeout_count = sum(1 for row in model_rows if row.timeout)
         entry = {
             "model": model,
             "model_path": sample.model_path,
@@ -640,6 +757,12 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
                 for category in categories
             },
         }
+        # Add timeout info to each category
+        for category in categories:
+            cat_rows = [row for row in model_rows if row.category == category]
+            cat_timeout_count = sum(1 for row in cat_rows if row.timeout)
+            entry["categories"][category]["timeout_count"] = cat_timeout_count
+            entry["categories"][category]["timeout_badge"] = "⏱️" if cat_timeout_count > 0 else ""
         if model in scoring_by_model:
             s = scoring_by_model[model]
             entry["final_score"] = s.get("final_score", 0.0)
@@ -657,6 +780,8 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
         entry["max_tokens_per_second"] = max((row.tokens_per_second for row in model_rows), default=0.0)
         entry["avg_elapsed_seconds"] = round(sum(row.elapsed_seconds for row in model_rows) / len(model_rows), 4) if model_rows else 0.0
         entry["avg_tokens_generated"] = round(sum(row.tokens_generated for row in model_rows) / len(model_rows), 2) if model_rows else 0.0
+        entry["avg_tokens_per_second_weighted"] = round(weighted_tps, 4)
+        entry["timeout_badge"] = "⏱️" if timeout_count > 0 else ""
         models.append(entry)
 
     payload = {
@@ -854,6 +979,9 @@ def main() -> int:
             print(f"Modelo não encontrado: {model}", file=sys.stderr)
             continue
 
+        if not is_architecture_supported(model):
+            continue
+
         print(f"\n==> Testando {model.name}")
         server_proc: ServerProcess | None = None
         model_rows: list[BenchmarkResult] = []
@@ -932,6 +1060,7 @@ def main() -> int:
                         response_body=clean_response(response_body),
                         output=clean_response(stdout),
                         error=stderr,
+                        timeout=elapsed >= args.timeout,
                     )
                 )
                 model_rows.append(results[-1])

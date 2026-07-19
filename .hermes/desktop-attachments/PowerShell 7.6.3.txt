@@ -1,0 +1,28 @@
+PowerShell 7.6.3
+PS C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local> .\run-benchmark-auto.ps1
+✓ llama-server encontrado em LLAMA_SERVER_EXE: C:\Users\Jason\AppData\Local\Microsoft\WinGet\Packages\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\llama-server.exe
+
+📊 Benchmark Local de Modelos GGUF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Servidor: C:\Users\Jason\AppData\Local\Microsoft\WinGet\Packages\ggml.llamacpp_Microsoft.Winget.Source_8wekyb3d8bbwe\llama-server.exe
+Modelos: C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\models
+Saída: C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\reports\benchmark_results.csv
+
+Python: Python 3.11.15
+
+==> Testando Bonsai-27B-dspark-bf16.gguf
+  aguardando o modelo terminar de carregar...
+  servidor finalizado
+Traceback (most recent call last):
+  File "C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\scripts\benchmark_models.py", line 1007, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\scripts\benchmark_models.py", line 883, in main
+    wait_for_server_ready(server_proc, f"http://localhost:{server_port}", args.server_start_timeout)
+  File "C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\scripts\benchmark_models.py", line 345, in wait_for_server_ready
+    raise RuntimeError(
+RuntimeError: llama-server encerrou antes de ficar pronto. Consulte o log em: C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local\reports\server-logs\Bonsai-27B-dspark-bf16.server.log
+
+❌ Benchmark falhou com código 1
+
+PS C:\Users\Jason\Desktop\PROJETOS\03 - DONE\benchmark_local>

@@ -299,6 +299,7 @@
       const performanceColumns = [
         { key: "model", label: "Modelo" },
         { key: "avg_tokens_per_second", label: "Avg tok/s" },
+        { key: "timeout_badge", label: "Timeout" },
       ];
       categories.forEach((cat) => performanceColumns.push({ key: cat, label: cat }));
       el("simpleTable").querySelector("thead").innerHTML = `<tr>${performanceColumns.map((c) => `<th data-tip="${tooltip(c.key)}" data-key="${c.key}">${c.label}<span class="sort-icon ${state.sortKey === c.key ? (state.sortDir === "asc" ? "up" : "down") : ""}"></span></th>`).join("")}</tr>`;
@@ -312,6 +313,7 @@
         <tr>
           <td>${row.model}</td>
           <td>${fmt1.format(row.avg_tokens_per_second ?? 0)}</td>
+          <td class="${row.timeout_badge === "" ? "good" : "bad"}">${row.timeout_badge === "" ? "Nenhum" : row.timeout_badge}</td>
           ${categories.map((c) => `<td>${fmt1.format(row[c] ?? 0)}</td>`).join("")}
         </tr>
       `).join("");

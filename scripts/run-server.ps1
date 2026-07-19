@@ -75,8 +75,8 @@ Write-Host ""
     -c 65536 `
     -ngl 99 `
     --threads 8 --threads-batch 8 `
-    --batch-size 2048 `
-    --ubatch-size 2048 `
+    --batch-size 4096 `
+    --ubatch-size 4096 `
     --flash-attn on `
     --cache-type-k q4_0 `
     --cache-type-v q4_0 `

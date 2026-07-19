@@ -5,18 +5,27 @@ $MODELS = Join-Path $ROOT "models"
 $OUT = Join-Path $ROOT "reports\benchmark_results.csv"
 $BENCHMARK = Join-Path $ROOT "scripts\benchmark_models.py"
 
-# Procura llama-server.exe de várias formas:
-# 1. Variável de ambiente LLAMA_SERVER_EXE
-# 2. No PATH
-# 3. Fallback local (comentado para não quebrar se não existir)
+# Procura llama-server.exe de várias formas (por ordem de preferência):
+# 1. Build CUDA local (mais compatível, suporta mais arquiteturas)
+# 2. Variável de ambiente LLAMA_SERVER_EXE
+# 3. No PATH
 
 $SERVER = $null
 
-if ($env:LLAMA_SERVER_EXE) {
+# 1 — Build CUDA local (compilado manualmente, suporta mais arquiteturas como dspark)
+$common = "C:\Users\$env:USERNAME\llama.cpp\build-cuda\bin\llama-server.exe"
+if (Test-Path $common) {
+    $SERVER = $common
+    Write-Host "✓ llama-server encontrado (build CUDA local): $SERVER" -ForegroundColor Green
+}
+
+# 2 — Variável de ambiente (sobrescreve apenas se o build local não existir)
+if ((-not $SERVER) -and $env:LLAMA_SERVER_EXE) {
     $SERVER = $env:LLAMA_SERVER_EXE
     Write-Host "✓ llama-server encontrado em LLAMA_SERVER_EXE: $SERVER" -ForegroundColor Green
 }
 
+# 3 — No PATH
 if (-not $SERVER) {
     $found = Get-Command llama-server -ErrorAction SilentlyContinue
     if ($found) {
@@ -24,15 +33,6 @@ if (-not $SERVER) {
         Write-Host "✓ llama-server encontrado no PATH: $SERVER" -ForegroundColor Green
     }
 }
-
-# Fallback para localização comum do llama.cpp (comentado — descomente se usar)
-# if (-not $SERVER) {
-#     $common = "C:\Users\$env:USERNAME\llama.cpp\build-cuda\bin\llama-server.exe"
-#     if (Test-Path $common) {
-#         $SERVER = $common
-#         Write-Host "✓ llama-server encontrado em localização comum: $SERVER" -ForegroundColor Green
-#     }
-# }
 
 if (-not $SERVER) {
     Write-Host "" -ForegroundColor Red
@@ -87,7 +87,7 @@ python $BENCHMARK `
     --kv-cache-bytes-per-token 32768 `
     --server-log-dir (Join-Path $ROOT "reports\server-logs") `
     --output $OUT `
-    --n-predict 2048 `
+    --n-predict 4096 `
     --temperature 0.6 `
     --top-p 0.95 `
     --repeat-penalty 1.1 `
