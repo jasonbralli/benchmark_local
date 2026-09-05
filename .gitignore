@@ -26,3 +26,6 @@ IDEA.md
 *.bak
 .worktrees/
 .pytest_cache/
+
+# Anexos locais do Hermes Desktop (transcricoes com caminhos da maquina)
+.hermes/
