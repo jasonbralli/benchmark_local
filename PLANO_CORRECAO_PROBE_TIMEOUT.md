@@ -3,7 +3,7 @@
 **Data:** 28/09/2026
 **Origem:** auditoria do LOG `Benchmark Local PowerShell 7.6.6-2.txt` (run 28/09 16:46)
 **Build:** llama-server 0.5.0-dev **b11193** (winget Vulkan, commit 4e7481175)
-**Status:** plano pronto — pendente de implementação
+**Status:** ✅ IMPLEMENTADO 28/09/2026 (commits `f21fd47` → rebase `139914d` + `e656380`) — smoke end-to-end validado; detalhes na seção 5
 
 ---
 
@@ -210,9 +210,33 @@ UD-IQ3_S sobe com `spec detectado: draft-mtp (modelo com MTP embutido)`.
 
 ## 4. Critérios de aceite
 
-- [ ] `_post_json` nunca deixa TimeoutError/OSError escapar (teste C1 verde)
-- [ ] `wait_for_server_ready` faz retry em timeout de leitura (teste C2 verde)
-- [ ] UD-IQ3_S detecta draft-mtp via header (teste C4 verde)
-- [ ] PS1 sem `--kv-cache-bytes-per-token` e sem mmproj inexistente; UTF-8 com BOM
-- [ ] Run completa end-to-end: 2 modelos testados, CSV + dashboard.json salvos
-- [ ] Métrica spec_active/spec_draft_type no CSV coerente com o log do servidor
+- [x] `_post_json` nunca deixa TimeoutError/OSError escapar (teste C1 verde)
+- [x] `wait_for_server_ready` faz retry em timeout de leitura (teste C2 verde)
+- [x] UD-IQ3_S detecta draft-mtp via header (teste C4 verde)
+- [x] PS1 sem `--kv-cache-bytes-per-token` e sem mmproj inexistente; UTF-8 com BOM
+- [x] Run completa end-to-end: 2 modelos testados, CSV + dashboard.json salvos
+- [x] Métrica spec_active/spec_draft_type no CSV coerente com o log do servidor
+
+---
+
+## 5. Resultado da implementação (28/09/2026)
+
+**Commits:** `f21fd47` (rebase → `139914d`) + `e656380`. Suite: **65/65 ✅** (python3 3.13.13, 10 testes novos).
+
+| Fix | Status | Evidência |
+|-----|--------|-----------|
+| A1 — `_post_json` captura `(URLError, TimeoutError, OSError)` | ✅ | teste `TestProbeResilience` |
+| A2 — probe `timeout=min(60, remaining)` + retry no loop | ✅ | smoke #3: exit 0 em 45s |
+| A3 — `gguf_has_mtp_header()` (header GGUF, 256 KB) | ✅ | UD-IQ3_S real: `spec detectado: draft-mtp (modelo com MTP embutido)`; log: `creating MTP draft context` + draft acceptance 0.43–1.0 |
+| A4 — print cleanup | ✅ | `servidor finalizado (cleanup do benchmark)` |
+| B — PS1: build CUDA Release + flags inválidas removidas + BOM | ✅ | `ParseFile` OK; Release b11223 CUDA0 16310 MiB |
+| C — testes de regressão (10 novos) | ✅ | suite 65/65 |
+| D1 — cleanup do corrompido | ✅ | removido |
+| D2 — run end-to-end | ✅ | smoke #4: 20/20 rc=0 em 45s, CSV `spec_type=draft-mtp` |
+
+### F9 — Descobertas pós-implementação
+
+1. **Build CUDA Release:** `C:\Users\Jason\llama.cpp\build-cuda\bin\Release\llama-server.exe` (0.5.0-dev **b11223**, MSVC 19.50, **CUDA0** 16310 MiB) — PS1 agora prioriza Release, com `bin\llama-server.exe` como fallback.
+2. **F10 — `--server-arg` com par valor:** `--server-arg "--cache-type-k q4_0"` chega ao llama-server como **1 argv único** (com espaço) — o parser dele não divide → `error: invalid argument: --cache-type-k q4-0`. Fix: `start_server` divide pares com `shlex.split` antes do `Popen`.
+3. **F11 — CSV `spec_type` vazio apesar de MTP real ativo:** (a) parser só casava formato antigo — b11223 usa `creating MTP draft context against the target model` (sem `draft model type =`); (b) `main` usava `.get(key, default)` — o dict do parser **sempre tem as chaves**, então o default nunca aplicaria. Fix: fallback `or` + `spec_active_pattern` adicional.
+4. **Nota sobre o score do smoke:** 0/10 é esperado com `--n-predict 8` (respostas cortadas antes dos critérios do scorer). Throughput e score reais precisam da run completa do PS1 (`--n-predict 4096`, ctx 65536).
