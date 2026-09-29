@@ -14,7 +14,11 @@ $SERVER = $null
 
 # 1 — Build CUDA local (compilado manualmente, suporta mais arquiteturas como dspark)
 $common = "C:\Users\$env:USERNAME\llama.cpp\build-cuda\bin\llama-server.exe"
-if (Test-Path $common) {
+$commonRelease = "C:\Users\$env:USERNAME\llama.cpp\build-cuda\bin\Release\llama-server.exe"
+if (Test-Path $commonRelease) {
+    $SERVER = $commonRelease
+    Write-Host "✓ llama-server encontrado (build CUDA local Release): $SERVER" -ForegroundColor Green
+} elseif (Test-Path $common) {
     $SERVER = $common
     Write-Host "✓ llama-server encontrado (build CUDA local): $SERVER" -ForegroundColor Green
 }
@@ -84,14 +88,15 @@ python $BENCHMARK `
     --warmup-n-predict 12 `
     --warmup-prompt "Responda apenas com OK." `
     --ctx-size 65536 `
-    --kv-cache-bytes-per-token 32768 `
     --server-log-dir (Join-Path $ROOT "reports\server-logs") `
     --output $OUT `
     --n-predict 4096 `
     --temperature 0.6 `
     --top-p 0.95 `
     --repeat-penalty 1.1 `
-    --seed 42
+    --seed 42 `
+    --spec-type auto `
+    --spec-draft-n-max 2 `
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""

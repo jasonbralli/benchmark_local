@@ -1,5 +1,4 @@
 $ErrorActionPreference = 'Stop'
-$ROOT = $PSScriptRoot
 
 Write-Host ''
 Write-Host 'Setup: Benchmark Local de Modelos GGUF' -ForegroundColor Cyan

@@ -26,29 +26,33 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 @dataclass
 class BenchmarkResult:
-    model: str
-    model_path: str
+    model: "str"
+    model_path: "str"
     model_size_bytes: int
     context_size: int
     server_ctx_train: int
     observed_state_size_bytes: int
     estimated_kv_cache_bytes: int
     estimated_loaded_bytes: int
-    prompt_id: str
-    category: str
+    prompt_id: "str"
+    category: "str"
     elapsed_seconds: float
     tokens_generated: int
     tokens_per_second: float
     return_code: int
-    response_body: str
-    output: str
-    error: str
+    response_body: "str"
+    output: "str"
+    error: "str"
     timeout: bool  # True se elapsed_seconds >= args.timeout
+    spec_type: str = ""
+    spec_n_max: int = 0
+    spec_mtp_layers: int = 0
+    spec_active: bool = False
 
 
 @dataclass
 class ServerProcess:
-    proc: subprocess.Popen[str]
+    proc: "subprocess.Popen[str]"
     log_file: TextIO
     log_path: Path
 
@@ -251,8 +255,8 @@ def run_prompt(command: str, timeout: int | None) -> tuple[int, str, str, float]
         return completed.returncode, completed.stdout.strip(), completed.stderr.strip(), elapsed
     except subprocess.TimeoutExpired as exc:
         elapsed = time.perf_counter() - start
-        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout.decode("utf-8", errors="replace") if exc.stdout else "")
-        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr.decode("utf-8", errors="replace") if exc.stderr else "timeout")
+        stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "timeout")
         return 124, stdout.strip(), stderr.strip(), elapsed
 
 
@@ -274,9 +278,12 @@ def _post_json(url: str, payload: dict[str, object], timeout: int | None) -> tup
         elapsed = time.perf_counter() - start
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         return exc.code, "", body.strip() or str(exc), elapsed
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        # socket.timeout/TimeoutError na LEITURA (getresponse) nao e subclasse de
+        # URLError nesse caminho - capturar aqui evita que um probe lento derrube
+        # o benchmark (ver PLANO_CORRECAO_PROBE_TIMEOUT.md).
         elapsed = time.perf_counter() - start
-        return 1, "", str(exc), elapsed
+        return 1, "", f"{type(exc).__name__}: {exc}", elapsed
 
 
 def run_server_prompt(
@@ -373,7 +380,16 @@ def reserve_free_port(host: str = "localhost") -> int:
         return sock.getsockname()[1]
 
 
-def start_server(server_exe: Path, model: Path, port: int, extra_args: list[str], log_dir: Path) -> ServerProcess:
+def start_server(
+    server_exe: Path,
+    model: Path,
+    port: int,
+    extra_args: list[str],
+    log_dir: Path,
+    mmproj: Path | None = None,
+    spec_type: str = "",
+    spec_n_max: int = 0,
+) -> ServerProcess:
     command = [
         str(server_exe),
         "-m",
@@ -382,7 +398,14 @@ def start_server(server_exe: Path, model: Path, port: int, extra_args: list[str]
         "localhost",
         "--port",
         str(port),
-    ] + extra_args
+    ]
+    if mmproj and mmproj.exists():
+        command += ["--mmproj", str(mmproj)]
+    if spec_type and spec_type != "none":
+        command += ["--spec-type", spec_type]
+        if spec_n_max > 0:
+            command += ["--spec-draft-n-max", str(spec_n_max)]
+    command += extra_args
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{model.stem}.server.log"
     log_file = log_path.open("w", encoding="utf-8")
@@ -400,15 +423,67 @@ def flush_log(server: ServerProcess) -> None:
     os.fsync(server.log_file.fileno())
 
 
-def parse_server_log_metrics(log_path: Path) -> dict[str, int]:
-    metrics: dict[str, int] = {
+def model_has_mtp(model_path: Path) -> bool:
+    """Heurística: detecta MTP embutido pelo padrão do nome do arquivo GGUF.
+
+    Convenções observadas (Unsloth, ikawrakow, bartowski):
+      - '*-mtp.gguf', '*_mtp.gguf', '*-MTP.gguf'
+      - '*-speculative.gguf' (EAGLE/MTP genérico)
+    Sufixo apenas — 'mtp' no meio do nome (ex: 'my_mtp_v2') NÃO indica MTP embutido.
+    """
+    stem = model_path.stem.lower()
+    return (
+        stem.endswith("-mtp")
+        or stem.endswith("_mtp")
+        or stem.endswith(".mtp")
+        or stem.endswith("-speculative")
+        or stem.endswith("_speculative")
+    )
+
+
+def gguf_has_mtp_header(model_path: Path) -> bool:
+    """Detecta MTP embutido pela metadata do GGUF (primeiros 256 KB).
+
+    O sufixo do filename perde MTP real: 'Qwen3.8-27B-UD-IQ3_S.gguf' tem
+    'qwen35.nextn_predict_layers' no header mas nao termina em '-mtp'.
+    """
+    try:
+        with open(model_path, "rb") as f:
+            head = f.read(262144)
+        return b"nextn_predict_layers" in head or b"mtp_num_hidden_layers" in head
+    except OSError:
+        return False
+
+
+def resolve_spec_type(requested: str, model_path: Path) -> str:
+    """Decide o spec-type efetivo para um modelo.
+
+    - 'auto': draft-mtp se o filename OU o header GGUF indicar MTP embutido, senao 'none'
+    - qualquer outro valor: repassado como esta (força o tipo)
+    """
+    if requested == "auto":
+        return (
+            "draft-mtp"
+            if model_has_mtp(model_path) or gguf_has_mtp_header(model_path)
+            else "none"
+        )
+    return requested
+
+
+def parse_server_log_metrics(log_path: Path) -> dict:
+    metrics: dict = {
         "server_ctx_seq": 0,
         "server_ctx_train": 0,
         "observed_state_size_bytes": 0,
+        "spec_active": False,
+        "spec_mtp_layers": 0,
+        "spec_draft_type": "",
     }
     ctx_pattern = re.compile(r"n_ctx_seq\s+\((\d+)\)\s+<\s+n_ctx_train\s+\((\d+)\)")
     state_pattern = re.compile(r"total state size =\s+([0-9.]+)\s+MiB")
     cache_pattern = re.compile(r"cache state:\s+\d+\s+prompts,\s+([0-9.]+)\s+MiB")
+    spec_pattern = re.compile(r"speculative decoding:.*draft model type\s*=\s*(\w+)(?:.*?n_max\s*=\s*(\d+))?")
+    mtp_layers_pattern = re.compile(r"mtp_num_hidden_layers\s*=\s*(\d+)")
 
     try:
         for line in log_path.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -433,6 +508,22 @@ def parse_server_log_metrics(log_path: Path) -> dict[str, int]:
                     metrics["observed_state_size_bytes"],
                     mib_to_bytes(float(cache_match.group(1))),
                 )
+                continue
+
+            if not metrics["spec_active"]:
+                spec_match = spec_pattern.search(line)
+                if spec_match:
+                    metrics["spec_active"] = True
+                    metrics["spec_draft_type"] = spec_match.group(1) or ""
+                    if spec_match.group(2):
+                        metrics["spec_mtp_layers"] = int(spec_match.group(2))
+                    continue
+
+            if metrics["spec_mtp_layers"] == 0:
+                mtp_match = mtp_layers_pattern.search(line)
+                if mtp_match:
+                    metrics["spec_mtp_layers"] = int(mtp_match.group(1))
+                    continue
     except FileNotFoundError:
         return metrics
 
@@ -453,6 +544,7 @@ def wait_for_server_ready(server: ServerProcess, base_url: str, timeout: int) ->
                 f"llama-server encerrou antes de ficar pronto. Consulte o log em: {server.log_path}"
             )
 
+        remaining = max(5.0, deadline - time.time())
         status, body, error, _elapsed = _post_json(
             probe_url,
             {
@@ -464,7 +556,7 @@ def wait_for_server_ready(server: ServerProcess, base_url: str, timeout: int) ->
                 "stream": False,
                 "seed": 42,
             },
-            timeout=5,
+            timeout=min(60, remaining),
         )
         if status == 200:
             return
@@ -545,6 +637,10 @@ def write_results_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
                 "estimated_kv_cache_gib",
                 "estimated_loaded_bytes",
                 "estimated_loaded_gib",
+                "spec_type",
+                "spec_n_max",
+                "spec_mtp_layers",
+                "spec_active",
                 "prompt_id",
                 "elapsed_seconds",
                 "tokens_generated",
@@ -570,6 +666,10 @@ def write_results_csv(path: Path, rows: Iterable[BenchmarkResult]) -> None:
                     format_gib(row.estimated_kv_cache_bytes),
                     row.estimated_loaded_bytes,
                     format_gib(row.estimated_loaded_bytes),
+                    row.spec_type,
+                    row.spec_n_max,
+                    row.spec_mtp_layers,
+                    row.spec_active,
                     row.prompt_id,
                     f"{row.elapsed_seconds:.4f}",
                     row.tokens_generated,
@@ -740,6 +840,11 @@ def write_dashboard_json(path: Path, rows: Iterable[BenchmarkResult], scoring_su
             "estimated_kv_cache_gib": round(sample.estimated_kv_cache_bytes / (1024 ** 3), 4),
             "estimated_loaded_bytes": sample.estimated_loaded_bytes,
             "estimated_loaded_gib": round(sample.estimated_loaded_bytes / (1024 ** 3), 4),
+            "spec_type": sample.spec_type,
+            "spec_n_max": sample.spec_n_max,
+            "spec_mtp_layers": sample.spec_mtp_layers,
+            "spec_active": sample.spec_active,
+            "mtp_badge": "🚀" if sample.spec_active else "",
             "avg_tokens_per_second": round(avg_tps, 4),
             "prompts_tested": prompts_tested,
             "successful_prompts": successful,
@@ -866,6 +971,23 @@ def main() -> int:
         help="Argumento extra repassado ao llama-server. Pode ser usado várias vezes.",
     )
     parser.add_argument(
+        "--spec-type",
+        default="auto",
+        choices=["auto", "none", "draft-mtp", "draft-simple", "draft-eagle3", "ngram-simple", "ngram-mod", "ngram-map-k", "ngram-map-k4v", "ngram-cache"],
+        help="Tipo de speculative decoding. 'auto' (default) ativa draft-mtp apenas para modelos cujo arquivo sugere MTP embutido (-mtp, _mtp, -speculative). Use 'draft-mtp' para forçar em todos.",
+    )
+    parser.add_argument(
+        "--spec-draft-n-max",
+        type=int,
+        default=2,
+        help="Quantidade maxima de tokens draft para MTP/speculative decoding (default 2).",
+    )
+    parser.add_argument(
+        "--mmproj",
+        type=Path,
+        help="Caminho para mmproj (projetor visual) quando o modelo GGUF é multimodal.",
+    )
+    parser.add_argument(
         "--n-predict",
         type=int,
         default=128,
@@ -985,11 +1107,23 @@ def main() -> int:
         print(f"\n==> Testando {model.name}")
         server_proc: ServerProcess | None = None
         model_rows: list[BenchmarkResult] = []
+        effective_spec = resolve_spec_type(args.spec_type, model)
+        if effective_spec != args.spec_type:
+            print(f"  spec detectado: {effective_spec} (modelo {'com' if model_has_mtp(model) or gguf_has_mtp_header(model) else 'sem'} MTP embutido)")
         try:
             server_url = args.server_url
             if args.server_exe:
                 server_port = args.server_port or reserve_free_port()
-                server_proc = start_server(args.server_exe, model, server_port, args.server_arg, args.server_log_dir)
+                server_proc = start_server(
+                    args.server_exe,
+                    model,
+                    server_port,
+                    args.server_arg,
+                    args.server_log_dir,
+                    mmproj=args.mmproj,
+                    spec_type=effective_spec,
+                    spec_n_max=args.spec_draft_n_max,
+                )
                 wait_for_server_ready(server_proc, f"http://localhost:{server_port}", args.server_start_timeout)
                 server_url = f"http://localhost:{server_port}"
                 print(f"  servidor pronto em {server_url}")
@@ -1061,6 +1195,10 @@ def main() -> int:
                         output=clean_response(stdout),
                         error=stderr,
                         timeout=elapsed >= args.timeout,
+                        spec_type=log_metrics.get("spec_draft_type", effective_spec if effective_spec != "none" else ""),
+                        spec_n_max=args.spec_draft_n_max if effective_spec != "none" else 0,
+                        spec_mtp_layers=log_metrics.get("spec_mtp_layers", 0),
+                        spec_active=log_metrics.get("spec_active", False),
                     )
                 )
                 model_rows.append(results[-1])
@@ -1102,7 +1240,7 @@ def main() -> int:
         finally:
             if server_proc is not None:
                 stop_process(server_proc)
-                print("  servidor finalizado")
+                print("  servidor finalizado (cleanup do benchmark)")
 
     write_results_csv(args.output, results)
     dashboard_output = args.output.with_name(f"{args.output.stem}.dashboard.json")

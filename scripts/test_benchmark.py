@@ -3,8 +3,12 @@ test_benchmark.py - Testes para benchmark_scorer e benchmark_models
 """
 import json
 import re
+import socket
 import sys
+import threading
+import time
 import pytest
+from types import SimpleNamespace
 from pathlib import Path
 
 # Add scripts directory to path
@@ -22,7 +26,16 @@ from benchmark_scorer import (
     print_results,
     CONFIG,
 )
-from benchmark_models import clean_response, format_gib, mib_to_bytes
+import benchmark_models
+from benchmark_models import (
+    _post_json,
+    clean_response,
+    format_gib,
+    gguf_has_mtp_header,
+    mib_to_bytes,
+    resolve_spec_type,
+    wait_for_server_ready,
+)
 
 
 # ── CONFIG ──────────────────────────────────────────────────────
@@ -414,6 +427,7 @@ class TestCsvDashboardConsistency:
         with open("reports/benchmark_results.csv") as f:
             reader = csv.DictReader(f)
             cols = reader.fieldnames
+        assert cols is not None
         assert "model" in cols
         assert "return_code" in cols
         assert "tokens_per_second" in cols
@@ -478,3 +492,83 @@ class TestThresholdConsistency:
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
+
+class TestProbeResilience:
+    """Regressão do plano PLANO_CORRECAO_PROBE_TIMEOUT.md (probe lento não derruba o run)."""
+
+    def test_post_json_timeout_returns_error_instead_of_raise(self):
+        # F-A: servidor aceita a conexão mas nunca responde -> socket.timeout na
+        # LEITURA (getresponse) não pode escapar do _post_json.
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        held = []
+
+        def _accept_and_hold():
+            conn, _ = srv.accept()
+            held.append(conn)  # segura a conexão sem responder
+
+        threading.Thread(target=_accept_and_hold, daemon=True).start()
+        try:
+            status, body, error, elapsed = _post_json(
+                f"http://127.0.0.1:{port}/completion",
+                {"prompt": "x", "n_predict": 1},
+                timeout=2,
+            )
+        finally:
+            for c in held:
+                c.close()
+            srv.close()
+        assert status == 1
+        assert "timeout" in error.lower()
+        assert elapsed >= 1.9
+
+    def test_wait_for_server_ready_retries_until_ready(self, monkeypatch, tmp_path):
+        calls = {"n": 0}
+
+        def fake_post(url, payload, timeout):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                return 1, "", "RemoteDisconnected: ", 0.1
+            return 200, '{"content":"OK"}', "", 0.1
+
+        monkeypatch.setattr(benchmark_models, "_post_json", fake_post)
+        monkeypatch.setattr("time.sleep", lambda s: None)
+
+        class _StubProc:
+            def poll(self):
+                return None
+
+        server = SimpleNamespace(proc=_StubProc(), log_file=None, log_path=tmp_path / "stub.log")
+        wait_for_server_ready(server, "http://localhost:1", timeout=30)
+        assert calls["n"] == 3
+
+    def test_wait_for_server_ready_deadline_raises(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(
+            benchmark_models, "_post_json", lambda url, payload, timeout: (1, "", "x", 0.1)
+        )
+        monkeypatch.setattr("time.sleep", lambda s: None)
+
+        class _StubProc:
+            def poll(self):
+                return None
+
+        server = SimpleNamespace(proc=_StubProc(), log_file=None, log_path=tmp_path / "stub.log")
+        with pytest.raises(TimeoutError):
+            wait_for_server_ready(server, "http://localhost:1", timeout=4)
+
+    def test_gguf_has_mtp_header_detects_embedded_mtp(self, tmp_path):
+        # F-B: sufixo do filename perde MTP real ('UD-IQ3_S'); header GGUF detecta.
+        with_mtp = tmp_path / "Qwen3.8-27B-UD-IQ3_S.gguf"
+        with_mtp.write_bytes(b"GGUF" + b"\x00" * 16 + b"qwen35.nextn_predict_layers\x00")
+        without_mtp = tmp_path / "Qwen3.8-27B-GSQ-RCO-IQ3_S.gguf"
+        without_mtp.write_bytes(b"GGUF" + b"\x00" * 16 + b"qwen35.attention.head_count\x00")
+        assert gguf_has_mtp_header(with_mtp) is True
+        assert gguf_has_mtp_header(without_mtp) is False
+
+    def test_resolve_spec_type_uses_header_not_only_suffix(self, tmp_path):
+        f = tmp_path / "Qwen3.8-27B-UD-IQ3_S.gguf"
+        f.write_bytes(b"GGUF" + b"\x00" * 16 + b"qwen35.nextn_predict_layers\x00")
+        assert resolve_spec_type("auto", f) == "draft-mtp"
+        assert resolve_spec_type("none", f) == "none"
