@@ -33,7 +33,9 @@ from benchmark_models import (
     format_gib,
     gguf_has_mtp_header,
     mib_to_bytes,
+    parse_server_log_metrics,
     resolve_spec_type,
+    start_server,
     wait_for_server_ready,
 )
 
@@ -572,3 +574,82 @@ class TestProbeResilience:
         f.write_bytes(b"GGUF" + b"\x00" * 16 + b"qwen35.nextn_predict_layers\x00")
         assert resolve_spec_type("auto", f) == "draft-mtp"
         assert resolve_spec_type("none", f) == "none"
+
+class TestServerArgs:
+    """--server-arg com par valor-precisa-ser-dividido (regressao do smoke 28/09)."""
+
+    def test_server_arg_with_value_splits_flag_pair(self, monkeypatch, tmp_path):
+        captured: dict = {}
+
+        class _P:
+            def poll(self):
+                return None
+
+        def fake_popen(command, **kwargs):
+            captured["cmd"] = list(command)
+            return _P()
+
+        monkeypatch.setattr(benchmark_models.subprocess, "Popen", fake_popen)
+        fake_exe = tmp_path / "llama-server.exe"
+        fake_exe.write_bytes(b"")
+        model = tmp_path / "m.gguf"
+        model.write_bytes(b"GGUF")
+
+        start_server(fake_exe, model, 1, ["--cache-type-k q4_0", "--threads 8"], tmp_path)
+        cmd = captured["cmd"]
+        assert "--cache-type-k" in cmd
+        idx = cmd.index("--cache-type-k")
+        assert cmd[idx + 1] == "q4_0"  # par dividido em 2 argvs
+        assert "--cache-type-k q4_0" not in cmd  # nunca como elemento unico
+        i2 = cmd.index("--threads")
+        assert cmd[i2 + 1] == "8"
+
+    def test_server_arg_bare_flag_stays_single(self, monkeypatch, tmp_path):
+        captured: dict = {}
+
+        class _P:
+            def poll(self):
+                return None
+
+        def fake_popen(command, **kwargs):
+            captured["cmd"] = list(command)
+            return _P()
+
+        monkeypatch.setattr(benchmark_models.subprocess, "Popen", fake_popen)
+        fake_exe = tmp_path / "llama-server.exe"
+        fake_exe.write_bytes(b"")
+        model = tmp_path / "m.gguf"
+        model.write_bytes(b"GGUF")
+
+        start_server(fake_exe, model, 1, ["--no-mmap"], tmp_path)
+        assert "--no-mmap" in captured["cmd"]
+
+class TestServerLogMetrics:
+    """parse_server_log_metrics: formatos legacy e b11223 (regressao do smoke 28/09)."""
+
+    def test_parses_legacy_mtp_log(self, tmp_path):
+        log = tmp_path / "m.server.log"
+        log.write_text(
+            "0.10 I main: speculative decoding: draft model type = mtp, n_max = 2\n",
+            encoding="utf-8",
+        )
+        m = benchmark_models.parse_server_log_metrics(log)
+        assert m["spec_active"] is True
+        assert m["spec_draft_type"] == "mtp"
+
+    def test_parses_b11223_mtp_log(self, tmp_path):
+        log = tmp_path / "m.server.log"
+        log.write_text(
+            "0.22 I common_speculative_init_result: creating MTP draft context against the target model 'm.gguf'\n"
+            "0.23 I srv  llama_server: model loaded\n",
+            encoding="utf-8",
+        )
+        m = benchmark_models.parse_server_log_metrics(log)
+        assert m["spec_active"] is True
+
+    def test_empty_log_no_spec(self, tmp_path):
+        log = tmp_path / "m.server.log"
+        log.write_text("0.00 I srv  llama_server: initializing ...\n", encoding="utf-8")
+        m = benchmark_models.parse_server_log_metrics(log)
+        assert m["spec_active"] is False
+        assert m["spec_draft_type"] == ""

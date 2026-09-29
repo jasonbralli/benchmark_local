@@ -405,7 +405,16 @@ def start_server(
         command += ["--spec-type", spec_type]
         if spec_n_max > 0:
             command += ["--spec-draft-n-max", str(spec_n_max)]
-    command += extra_args
+    # --server-arg chega ao llama-server como UM argv por ocorrencia; pares
+    # "--flag value" (com espaco) precisam ser divididos, senao o parser do
+    # llama-server rejeita o elemento inteiro (invalid argument).
+    expanded_args: list[str] = []
+    for arg in extra_args:
+        try:
+            expanded_args.extend(shlex.split(arg) if " " in arg else [arg])
+        except ValueError:
+            expanded_args.append(arg)
+    command += expanded_args
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{model.stem}.server.log"
     log_file = log_path.open("w", encoding="utf-8")
@@ -483,6 +492,8 @@ def parse_server_log_metrics(log_path: Path) -> dict:
     state_pattern = re.compile(r"total state size =\s+([0-9.]+)\s+MiB")
     cache_pattern = re.compile(r"cache state:\s+\d+\s+prompts,\s+([0-9.]+)\s+MiB")
     spec_pattern = re.compile(r"speculative decoding:.*draft model type\s*=\s*(\w+)(?:.*?n_max\s*=\s*(\d+))?")
+    # b11223+: 'creating MTP draft context against the target model' (sem 'draft model type =')
+    spec_active_pattern = re.compile(r"creating MTP draft context|draft model type\s*=")
     mtp_layers_pattern = re.compile(r"mtp_num_hidden_layers\s*=\s*(\d+)")
 
     try:
@@ -517,6 +528,9 @@ def parse_server_log_metrics(log_path: Path) -> dict:
                     metrics["spec_draft_type"] = spec_match.group(1) or ""
                     if spec_match.group(2):
                         metrics["spec_mtp_layers"] = int(spec_match.group(2))
+                    continue
+                if spec_active_pattern.search(line):
+                    metrics["spec_active"] = True
                     continue
 
             if metrics["spec_mtp_layers"] == 0:
@@ -1195,10 +1209,12 @@ def main() -> int:
                         output=clean_response(stdout),
                         error=stderr,
                         timeout=elapsed >= args.timeout,
-                        spec_type=log_metrics.get("spec_draft_type", effective_spec if effective_spec != "none" else ""),
-                        spec_n_max=args.spec_draft_n_max if effective_spec != "none" else 0,
+                        # fallback com 'or' (nao .get(key, default)): o dict do
+                        # parser SEMPRE tem as chaves - o default nunca aplicaria.
+                        spec_type=log_metrics.get("spec_draft_type") or (effective_spec if effective_spec != "none" else ""),
+                        spec_n_max=args.spec_draft_n_max if (effective_spec != "none" or log_metrics.get("spec_active")) else 0,
                         spec_mtp_layers=log_metrics.get("spec_mtp_layers", 0),
-                        spec_active=log_metrics.get("spec_active", False),
+                        spec_active=log_metrics.get("spec_active") or (effective_spec != "none"),
                     )
                 )
                 model_rows.append(results[-1])
