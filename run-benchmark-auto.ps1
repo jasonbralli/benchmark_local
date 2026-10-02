@@ -78,6 +78,10 @@ if ($major -lt 3) {
 }
 Write-Host "Python: $pyVer" -ForegroundColor Gray
 
+# Flags de performance repassadas DIRETO ao llama-server via --server-arg
+# (start_server divide pares --flag value com shlex.split). Sem elas o server
+# sobe com defaults do build (n_threads 8, 4 slots x ctx 4096, KV f16) ->
+# offload parcial p/ CPU: GPU ~28%, tg ~14.7 t/s (auditoria 02/10).
 python $BENCHMARK `
     $MODELS `
     --recursive `
@@ -97,6 +101,15 @@ python $BENCHMARK `
     --seed 42 `
     --spec-type auto `
     --spec-draft-n-max 2 `
+    --server-arg '-ngl 99' `
+    --server-arg '--flash-attn on' `
+    --server-arg '--cache-type-k q4_0' `
+    --server-arg '--cache-type-v q4_0' `
+    --server-arg '--parallel 1' `
+    --server-arg '--ctx-size 65536' `
+    --server-arg '--batch-size 2048' `
+    --server-arg '--ubatch-size 1024' `
+    --server-arg '--threads 14'
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
