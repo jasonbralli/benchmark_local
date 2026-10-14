@@ -2,6 +2,8 @@
 
 Benchmarks de modelos locais GGUF em um painel unificado e autossuficiente.
 
+> **English** — benchmark_local is an automated benchmarking pipeline for open-weights LLMs (GGUF) served locally with [llama.cpp](https://github.com/ggml-org/llama.cpp): one server per model, a 20-prompt suite across coding / structured extraction / instruction-following / reasoning, automated rubric scoring (speed, quality, consistency, resources) and a static dashboard. It auto-detects Multi-Token Prediction (MTP) heads in the GGUF metadata to enable speculative decoding, and pins 9 validated serving flags so the numbers reflect a tuned, real-world configuration. Full documentation in Portuguese below.
+
 ## Descrição
 
 Este projeto avalia automaticamente modelos locais de linguagem (formato GGUF) em quatro categorias de tarefas:
@@ -15,7 +17,7 @@ Fornece métricas de performance (tokens/s), qualidade (score automatizado), con
 ## Requisitos
 
 - Python 3.9+
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) (llama-server.exe)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server.exe`) — o pipeline resolve sozinho o build CUDA local em `C:\Users\<user>\llama.cpp\build-cuda\bin\Release\llama-server.exe`, se existir; senão usa a variável de ambiente `LLAMA_SERVER_EXE` ou o PATH
 - PowerShell (Windows)
 
 ## Instalação e Setup
@@ -44,8 +46,9 @@ O script:
 ```
 
 O script:
-- Procura `llama-server.exe` (variável de ambiente, PATH, ou manual)
-- Sobe um servidor por modelo (porta aleatória)
+- Procura `llama-server.exe` (build CUDA local `Release`, variável de ambiente, PATH, ou manual)
+- Sobe um servidor por modelo (porta aleatória) com as [9 flags de serving validadas](#flags-de-servidor-validadas)
+- Detecta automaticamente cabeças MTP no GGUF e habilita speculative decoding quando o modelo suporta (`--spec-type auto`)
 - Realiza warmup para estabilizar o modelo
 - Executa 20 prompts distribuídos em 4 categorias (5 por categoria)
 - Avalia as respostas com scoring automatizado
@@ -54,10 +57,10 @@ O script:
 ### 4. Reavaliar sem reexecutar (`rescore.py`)
 
 ```bash
-python3 scripts/rescore.py
+python3 scripts/rescore.py ..\reports\benchmark_results.csv
 ```
 
-Recalcula os scores de avaliação usando os prompts e respostas já existentes em `reports/benchmark_results.csv`, sem precisar reexecutar o benchmark completo. Útil para testar mudanças na rubrica de scoring.
+Recalcula os scores de avaliação usando os prompts e respostas já existentes em `benchmark_results.csv`, sem precisar reexecutar o benchmark completo. Útil para testar mudanças na rubrica de scoring.
 
 ### 5. Rodar os testes
 
@@ -65,7 +68,37 @@ Recalcula os scores de avaliação usando os prompts e respostas já existentes 
 python3 -m pytest scripts/test_benchmark.py -v
 ```
 
-51 testes cobrem todos os scorers, a orquestração do `BenchmarkEvaluator`, limpeza de respostas e consistência de thresholds.
+**65 testes** cobrem todos os scorers, a orquestração do `BenchmarkEvaluator`, limpeza de respostas, consistência de thresholds, o gate de arquiteturas, a propagação das flags `--spec-*`/`--server-arg` e as regressões do probe de servidor (timeout adaptativo).
+
+## MTP e Speculative Decoding (automático)
+
+Modelos recentes embarcam cabeças **MTP** (Multi-Token Prediction) no próprio GGUF — desde o llama.cpp ~b10217 (`load_mtp`) elas carregam junto, sem mais um `--model-draft` separado. O benchmark aproveita isso sem intervenção manual:
+
+- `--spec-type auto` (padrão do `run-benchmark-auto.ps1`): lê o metadata do GGUF (`nextn_predict_layers`) direto do header do arquivo e decide o spec-type efetivo **por modelo**
+- Modelos com MTP sobem com speculative decoding (`draft-mtp`, `--spec-draft-n-max 2`); modelos sem MTP rodam com `none` — comportamento legado preservado
+- O log do servidor é parseado (`parse_server_log_metrics`) para extrair contexto de carga e estado do spec
+- O CSV registra as colunas `spec_type`, `spec_active`, `spec_mtp_layers` e `spec_n_max`, então dá para comparar `com/sem MTP` entre modelos no mesmo relatório
+
+Detalhes técnicos e critérios de aceite: [`PLANO_ATUALIZACAO_MTP.md`](PLANO_ATUALIZACAO_MTP.md).
+
+## Flags de servidor validadas
+
+Sem flags explícitas, o `llama-server` sobe com defaults do build (threads da caixa, múltiplos slots, KV cache f16) — o que causava offload parcial para CPU: **GPU 28% e 14,7 t/s** de geração num RTX 5060 Ti. O `run-benchmark-auto.ps1` fixa 9 flags para um serving reproduzível e todo-GPU:
+
+```
+--spec-type auto --spec-draft-n-max 2
+--server-arg '-ngl 99'
+--server-arg '--flash-attn on'
+--server-arg '--cache-type-k q4_0'
+--server-arg '--cache-type-v q4_0'
+--server-arg '--parallel 1'
+--server-arg '--ctx-size 65536'
+--server-arg '--batch-size 2048'
+--server-arg '--ubatch-size 1024'
+--server-arg '--threads <n>'
+```
+
+Validado no hardware de referência: pico de **GPU 94%** (14,5 GB VRAM) e **42,7–48 t/s** de geração — cerca de 3× o baseline sem flags.
 
 ## Saídas geradas
 
@@ -73,7 +106,6 @@ python3 -m pytest scripts/test_benchmark.py -v
 reports/
 ├── benchmark_results.csv              # Registros brutos de todos os prompts
 ├── benchmark_results.dashboard.json   # Payload do dashboard (carregável por arrastar)
-├── scoring_summary.json               # Resumo de avaliação por modelo
 └── server-logs/                       # Logs do llama-server por modelo
     └── *.server.log
 ```
@@ -97,6 +129,7 @@ O dashboard é um arquivo HTML estático que não depende de servidor HTTP.
 - **Tooltips**: explicações ao passar o mouse sobre cabeçalhos e colunas
 - **Exportar PDF**: usa a impressão nativa do navegador
 - **Indicadores visuais**: setas ▲/▼ mostram a direção da ordenação
+- **Badge de timeout**: aviso vermelho na coluna "Timeout" da tabela Performance
 
 ### Estrutura do Dashboard
 
@@ -111,23 +144,37 @@ O dashboard é um arquivo HTML estático que não depende de servidor HTTP.
 
 ```
 benchmark_local/
-├── README.md                       # Documentação deste arquivo
-├── LICENSE                         # Licença MIT
-├── setup.ps1                       # Script de preparação do ambiente
-├── run-benchmark-auto.ps1          # Script principal de benchmark (PS1)
-├── index.html                      # Dashboard visual (carrega JSON via botão)
-├── prompts.json                    # 20 prompts de avaliação (5 por categoria)
-├── models/                         # Pasta para arquivos .gguf (não versionado)
-├── reports/                        # Relatórios gerados (não versionado)
-│   ├── benchmark_results.csv
-│   ├── benchmark_results.dashboard.json
-│   ├── scoring_summary.json
-│   └── server-logs/
+├── README.md                            # Documentação deste arquivo
+├── LICENSE                              # Licença MIT
+├── pyproject.toml                       # Metadados e dependências do projeto
+├── setup.ps1                            # Script de preparação do ambiente
+├── run-benchmark-auto.ps1               # Pipeline principal (serving flags + MTP auto)
+├── index.html                           # Dashboard visual (carrega JSON via botão)
+├── PLANO_ATUALIZACAO_MTP.md             # Plano da atualização MTP (fechado)
+├── PLANO_CORRECAO_PROBE_TIMEOUT.md      # Plano do fix de probe timeout (fechado)
+├── models/                              # Pasta para arquivos .gguf (não versionado)
+├── reports/                             # Relatórios gerados (não versionado)
+│   └── server-logs/                     # Logs do llama-server por modelo
 └── scripts/
-    ├── benchmark_models.py         # Motor de benchmark (Python)
-    ├── benchmark_scorer.py         # Sistema de avaliação automatizada
-    └── run-server.ps1              # Script auxiliar para rodar servidor
+    ├── benchmark_models.py              # Motor de benchmark (gate de arquiteturas, MTP, métricas)
+    ├── benchmark_scorer.py              # Sistema de avaliação automatizada
+    ├── rescore.py                       # Re-avaliação offline da rubrica (sem reexecutar)
+    ├── regenerate_data.py               # Regeneração do CSV/dashboard.json com nova lógica
+    ├── test_benchmark.py                # Suíte pytest (65 testes)
+    ├── prompts.json                     # 20 prompts de avaliação (5 por categoria)
+    ├── scoring_config.json              # Configuração da rubrica de scoring
+    └── run-server.ps1                   # Script auxiliar para subir o servidor
 ```
+
+## Arquiteturas suportadas
+
+`scripts/benchmark_models.py` mantém um gate `SUPPORTED_ARCHITECTURES` (100+ arquiteturas de LLM: llama, qwen2/3, glm4_moe, hunyuan_moe, minimax_m2, phi3, mamba2, grok etc.). Modelos com arquitetura fora da lista, ou classificados como `NON_LLM_ARCHITECTURES` (encoders, projetores multimodais, embeddings), são pulados com aviso — nunca quebram a execução.
+
+Adicionadas recentemente:
+- `k2-horizon` — arquitetura K2 Horizon (IFM); o GGUF grava o nome **com hífen**, o gate aceita as duas grafias
+- `modern-bert` — ModernBERT; encoder-only (embeddings/decision models), classificado em `NON_LLM_ARCHITECTURES`, portanto pulado no ranking de LLMs
+
+Adicionar uma arquitetura nova exige patch manual no gate — by design: evita "benchmarcar" algo que o llama-server não suporta de fato.
 
 ## Sistema de Avaliação
 
@@ -172,25 +219,9 @@ O benchmark captura e registra automaticamente:
 - **Truncated output** — modelo produz menos tokens que o mínimo configurado.
 - **Erro no servidor** — `return_code != 0`. O registro é salvo mas o modelo pode não ser avaliado.
 - **Erro de leitura** — prompt não encontrado em `prompts.json`. Ignorado com log de aviso.
+- **Probe de servidor com timeout adaptativo** — a espera pelo servidor usa `min(60, restante)` do deadline total (`server_start_timeout`), e `_post_json` captura `URLError`, `TimeoutError` e `OSError` com retry — antes, um `TimeoutError` no `getresponse` escapava e derrubava o benchmark no primeiro modelo (kernels Vulkan podem levar >5s no primeiro load). Detalhes em [`PLANO_CORRECAO_PROBE_TIMEOUT.md`](PLANO_CORRECAO_PROBE_TIMEOUT.md).
 
-### Dashboard
-
-O dashboard é um arquivo HTML estático que não depende de servidor HTTP.
-
-### Como usar
-
-1. Abra `index.html` diretamente no navegador
-2. Clique em **"Carregar JSON"** e selecione `reports/benchmark_results.dashboard.json`
-3. Ou use o botão **"Recarregar"** após o carregamento
-
-### Funcionalidades
-
-- **4 blocos de comparação**: Performance, Qualidade, Consistência, Recursos
-- **Ordenação por coluna**: clique no título para ordenar (asc/desc)
-- **Tooltips**: explicações ao passar o mouse sobre cabeçalhos e colunas
-- **Exportar PDF**: usa a impressão nativa do navegador
-- **Indicadores visuais**: setas ▲/▼ mostram a direção da ordenação
-- **Badge de timeout**: aviso vermelho na coluna "Timeout" da tabela Performance
+## Roadmap
 
 - [ ] Suporte a múltiplos modelos em paralelo
 - [ ] Comparação visual com gráficos de barras
@@ -200,6 +231,7 @@ O dashboard é um arquivo HTML estático que não depende de servidor HTTP.
 - [ ] Dashboard com filtros por categoria
 - [ ] Exportação de relatórios em PDF com marcação automática
 - [ ] Suporte a avaliação com LLM externo (feedback de modelo)
+- [ ] Métricas de acceptance rate do MTP (`spec_accept_rate`, `tps_spec` vs baseline)
 - [ ] Configuração via `.env` para variáveis de ambiente
 - [ ] Suporte a Windows Terminal e WSL
 
