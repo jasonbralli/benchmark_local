@@ -98,10 +98,12 @@ SUPPORTED_ARCHITECTURES: set[str] = {
     "glm4_moe", "gpt2", "gptj", "gptneox", "granite", "granite_hybrid",
     "granite_moe", "grok", "grovemoe", "hunyuan_dense", "hunyuan_moe",
     "hunyuan_vl", "internlm2", "jais", "jais2", "jamba", "jina_bert_v2",
-    "jina_bert_v3", "kimi_linear", "lfm2", "lfm2moe", "llada", "llada_moe",
+    "jina_bert_v3", "k2-horizon", "k2_horizon",  # K2 Horizon (IFM, PR #29535) - GGUF grava com hifen
+    "kimi_linear", "lfm2", "lfm2moe", "llada", "llada_moe",
     "llama", "llama_embed", "llama4", "maincoder", "mamba", "mamba2", "mellum",
     "mimo2", "minicpm", "minicpm3", "minimax_m2", "mistral3", "mistral4",
-    "modern_bert", "mpt", "nemotron", "nemotron_h", "nemotron_h_moe",
+    "modern_bert", "modern-bert",  # ModernBERT (Laya/decision, PR #29818) - GGUF grava com hifen
+    "mpt", "nemotron", "nemotron_h", "nemotron_h_moe",
     "neo_bert", "nomic_bert", "nomic_bert_moe", "olmo", "olmo2", "olmoe",
     "openai_moe", "openelm", "orion", "paddleocr", "pangu_embed", "phi2",
     "phi3", "phimoe", "plamo", "plamo2", "plamo3", "plm", "qwen", "qwen2",
@@ -118,7 +120,7 @@ NON_LLM_ARCHITECTURES: set[str] = {
     "t5",          # encoder-only / multimodal
     "t5encoder",   # encoder-only
     "bert",        # encoder-only
-    "modern_bert", # encoder-only
+    "modern_bert", "modern-bert", # encoder-only (decision System One / embeddings)
     "nomic_bert",  # encoder-only
     "nomic_bert_moe", # encoder-only
     "neo_bert",    # encoder-only
